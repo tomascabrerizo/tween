@@ -185,32 +185,8 @@ static aiNode *find_root_node(const aiScene *scene) {
     return node;
 }
 
-int main(void) {
+void write_animation(const aiScene *scene, FILE *file) {
 
-    Assimp::Importer importer;
-
-    const aiScene *scene = importer.ReadFile("./data/model.dae", 
-            aiProcess_Triangulate           |
-            aiProcess_JoinIdenticalVertices |
-            aiProcess_SortByPType); 
-
-    if(scene == nullptr) {
-        printf("Assimp error: %s\n", importer.GetErrorString());
-        return 1;
-    }
-   
-    FILE *file = fopen("./data/Angry.twa", "wb");
-
-    if(file == nullptr) {
-        printf("Cannot open specified file\n");
-        return 1;
-    }
-    
-    unsigned int magic = TWEEN_MAGIC;
-
-    printf("Magic Number: %d\n", magic);
-    fwrite(&magic, sizeof(unsigned int), 1, file);
-    
     unsigned int flags = 0;
     if(scene->HasAnimations()) {
         flags |= TWEEN_ANIMATIONS;
@@ -259,39 +235,12 @@ int main(void) {
         }
     }
 
-    fclose(file);
-
     printf("Animation file write perfectly\n");
 
-    return 0;
 }
 
-int main2(void) {
+void write_model(const aiScene *scene, FILE *file) {
 
-    Assimp::Importer importer;
-
-    const aiScene *scene = importer.ReadFile("./data/Angry.dae", 
-            aiProcess_Triangulate           |
-            aiProcess_JoinIdenticalVertices |
-            aiProcess_SortByPType); 
-    
-    if(scene == nullptr) {
-        printf("Assimp error: %s\n", importer.GetErrorString());
-        return 1;
-    }
-   
-    FILE *file = fopen("./data/Angry.twm", "wb");
-
-    if(file == nullptr) {
-        printf("Cannot open specified file\n");
-        return 1;
-    }
-    
-    unsigned int magic = TWEEN_MAGIC;
-
-    printf("Magic Number: %d\n", magic);
-    fwrite(&magic, sizeof(unsigned int), 1, file);
-    
     unsigned int flags = 0;
     if(scene->HasMeshes()) {
         flags |= TWEEN_MODEL;
@@ -378,7 +327,52 @@ int main2(void) {
         }
     }
     
-    fclose(file);
+    printf("Model file write perfectly\n");
+
+}
+
+int main(void) {
+
+    Assimp::Importer importer;
+
+    const aiScene *scene = importer.ReadFile("./data/Angry.dae", 
+            aiProcess_Triangulate           |
+            aiProcess_JoinIdenticalVertices |
+            aiProcess_SortByPType); 
+
+    if(scene == nullptr) {
+        printf("Assimp error: %s\n", importer.GetErrorString());
+        return 1;
+    }
+    
+    unsigned int magic = TWEEN_MAGIC;
+    
+    // NOTE: Write animation file
+
+    FILE *animation = fopen("./data/Angry.twa", "wb");
+    if(animation == nullptr) {
+        printf("Cannot open specified file\n");
+        return 1;
+    }
+    
+
+    printf("Magic Number: %d\n", magic);
+    fwrite(&magic, sizeof(unsigned int), 1, animation);
+    write_animation(scene, animation);
+    fclose(animation);
+
+    // NOTE: Write model file
+
+    FILE *model = fopen("./data/Angry.twm", "wb");
+    if(model == nullptr) {
+        printf("Cannot open specified file\n");
+        return 1;
+    }
+
+    printf("Magic Number: %d\n", magic);
+    fwrite(&magic, sizeof(unsigned int), 1, model);
+    write_model(scene, model);
+    fclose(model);
 
     return 0;
 }
