@@ -12,12 +12,10 @@
 #include <assimp/mesh.h>
 
 #define TWEEN_MAGIC ((unsigned int)('E'<<24)|('E'<<16)|('W'<<8)|'T')
-#define TWEEN_FLAGS 0
 
 #define TWEEN_MODEL      (1 << 0)
 #define TWEEN_SKELETON   (1 << 1)
 #define TWEEN_ANIMATIONS (1 << 2)
-
 
 static void write_key_frame(unsigned int id, aiVectorKey position_key, aiQuatKey rotation_key, aiVectorKey scaling_key, FILE* file) {
     assert(position_key.mTime == rotation_key.mTime && position_key.mTime == rotation_key.mTime);
@@ -273,8 +271,7 @@ void write_model(const aiScene *scene, FILE *file) {
         aiString path;
         mat->GetTexture(aiTextureType_DIFFUSE, 0, &path);
         printf("material: %s, length: %d\n", path.C_Str(), path.length);
-        fwrite(&path.length, sizeof(unsigned int), 1, file);
-        fwrite(path.data, sizeof(unsigned char), path.length, file);
+        write_string(path, file);
     }
 
     for (unsigned int i = 0; i < scene->mNumMeshes; ++i) {
@@ -285,9 +282,15 @@ void write_model(const aiScene *scene, FILE *file) {
             aiVector3D position = mesh->mVertices[j];
             aiVector3D normal = mesh->mNormals[j];
             aiVector3D texcoord = mesh->mTextureCoords[0][j];
-
-            fwrite(&position, sizeof(float)*3, 1, file);
-            fwrite(&normal, sizeof(float)*3, 1, file);
+            
+            fwrite(&position.x, sizeof(float), 1, file);
+            fwrite(&position.y, sizeof(float), 1, file);
+            fwrite(&position.z, sizeof(float), 1, file);
+            
+            fwrite(&normal.x, sizeof(float), 1, file);
+            fwrite(&normal.y, sizeof(float), 1, file);
+            fwrite(&normal.z, sizeof(float), 1, file);
+            
             fwrite(&texcoord.x, sizeof(float), 1, file);
             fwrite(&texcoord.y, sizeof(float), 1, file);
 
@@ -335,7 +338,7 @@ int main(void) {
 
     Assimp::Importer importer;
 
-    const aiScene *scene = importer.ReadFile("./data/Angry.dae", 
+    const aiScene *scene = importer.ReadFile("./data/model.dae", 
             aiProcess_Triangulate           |
             aiProcess_JoinIdenticalVertices |
             aiProcess_SortByPType); 
@@ -349,7 +352,7 @@ int main(void) {
     
     // NOTE: Write animation file
 
-    FILE *animation = fopen("./data/Angry.twa", "wb");
+    FILE *animation = fopen("./data/model.twa", "wb");
     if(animation == nullptr) {
         printf("Cannot open specified file\n");
         return 1;
@@ -363,7 +366,7 @@ int main(void) {
 
     // NOTE: Write model file
 
-    FILE *model = fopen("./data/Angry.twm", "wb");
+    FILE *model = fopen("./data/model.twm", "wb");
     if(model == nullptr) {
         printf("Cannot open specified file\n");
         return 1;

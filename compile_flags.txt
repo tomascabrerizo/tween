@@ -1,0 +1,13 @@
+Diagnostics:
+    ClangTidy:
+    Remove: bugprone-sizeof-expression
+
+-pedantic
+-D_GNU_SOURCE 
+-Wall
+-Wextra
+-Werror
+-g
+-I./code
+-I./thirdparty
+

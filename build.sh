@@ -6,6 +6,13 @@ then
 fi
 
 g++ -pedantic -D_GNU_SOURCE -Wall -Wextra -Werror -O0 -g -I./thirdparty -I./code \
-    ./code/main.cpp  \
-    -o ./build/tween -lm -lX11 -lGL -lassimp -lXcursor\
+    ./code/exporter.cpp \
+    -o ./build/export -lassimp \
     -Wno-implicit-fallthrough
+
+g++ -pedantic -D_GNU_SOURCE -Wall -Wextra -Werror -O0 -g -I./thirdparty -I./code \
+    ./thirdparty/stb_image.c \
+    ./code/importer.cpp ./code/gpu.c ./code/os.c \
+    -o ./build/import -lm -lX11 -lGL -lassimp -lXcursor\
+    -Wno-implicit-fallthrough \
+    -Wno-pedantic -Wno-write-strings 
