@@ -32,6 +32,9 @@ typedef struct Mesh {
     u32 num_indices;
 
     char material[MESH_MAX_NAME_SIZE];
+    
+    M4 *inv_bind_transform;
+    u32 num_inv_bind_transform;
 
 } Mesh;
 

@@ -8,7 +8,6 @@
 #include "common.h"
 #include "gpu.h"
 
-
 #define TWEEN_MAGIC ((unsigned int)('E'<<24)|('E'<<16)|('W'<<8)|'T')
 
 #define TWEEN_MODEL      (1 << 0)
@@ -26,7 +25,6 @@
 #define READ_S8(buffer) *((s8 *)buffer); buffer += 1
 
 #define READ_F32(buffer) *((f32 *)buffer); buffer += 4
-
 
 static void read_string(u8 **file, char *buffer) {
     u32 len = READ_U32(*file);
@@ -61,8 +59,41 @@ static void read_vertex(u8 **file, Vertex *vertex) {
 
     // NOTE: Initiallize weights
     for(u32 i = 0; i < MAX_BONES_INFLUENCE; ++i) {
-        vertex->weights[i] = 1.0f;
+        vertex->weights[i] = 0;
         vertex->bones_id[i] = -1.0f;
+    }
+}
+
+static void read_matrix(u8 **file, M4 *matrix) {
+    matrix->m[0] = READ_F32(*file);
+    matrix->m[1] = READ_F32(*file);
+    matrix->m[2] = READ_F32(*file);
+    matrix->m[3] = READ_F32(*file);
+    
+    matrix->m[4] = READ_F32(*file);
+    matrix->m[5] = READ_F32(*file);
+    matrix->m[6] = READ_F32(*file);
+    matrix->m[7] = READ_F32(*file);
+    
+    matrix->m[8] = READ_F32(*file);
+    matrix->m[9] = READ_F32(*file);
+    matrix->m[10] = READ_F32(*file);
+    matrix->m[11] = READ_F32(*file);
+    
+    matrix->m[12] = READ_F32(*file);
+    matrix->m[13] = READ_F32(*file);
+    matrix->m[14] = READ_F32(*file);
+    matrix->m[15] = READ_F32(*file);
+}
+
+static void add_weight_to_vertex(Vertex *vertex, u32 bone_id, f32 weight) {
+
+    for(u32 i = 0; i < MAX_BONES_INFLUENCE; ++i) {
+        if(vertex->bones_id[i] < 0) {
+            vertex->bones_id[i] = bone_id;
+            vertex->weights[i] = weight;
+            return;
+        }
     }
 }
 
@@ -111,14 +142,42 @@ static void read_tween_model_file(Model *model, u8 *file) {
     }
     
     if(flags & TWEEN_SKELETON) {
-        printf("Loading skeleton for model\n");
         
         char skeleton_name[256];
         read_string(&file, skeleton_name);
         printf("Skeleton name: %s\n", skeleton_name);
+
+        printf("Loading vertex weights for skeleton ... \n");
+
+        for(u32 mesh_index = 0; mesh_index < model->num_meshes; ++mesh_index) {
+            Mesh *mesh = model->meshes + mesh_index; (void)mesh;
+
+            u32 number_of_bones = READ_U32(file);
+            printf("number of bones: %d\n", number_of_bones);
+            
+            mesh->num_inv_bind_transform = number_of_bones;
+            mesh->inv_bind_transform = (M4 *)malloc(sizeof(M4)*mesh->num_inv_bind_transform);
+
+            for(u32 bone_index = 0; bone_index < number_of_bones; ++bone_index) {
+                
+                u32 current_bone_id = READ_U32(file);
+                u32 num_weights = READ_U32(file);
+                printf("current_bone id: %d, num_weights: %d\n", current_bone_id, num_weights);
+
+                for(u32 weights_index = 0; weights_index < num_weights; ++weights_index) {
+                    u32 vertex_index = READ_U32(file);
+                    f32 weight = READ_F32(file);
+                    ASSERT(vertex_index < mesh->num_vertices);
+                    Vertex *vertex = mesh->vertices + vertex_index;
+                    add_weight_to_vertex(vertex, current_bone_id, weight);
+                }
+                read_matrix(&file, &mesh->inv_bind_transform[bone_index]);
+            }
+        }
+
+        printf("All vertices ready for animation!\n");
+
     }
-
-
 }
 
 
@@ -202,8 +261,13 @@ int main(void) {
         M4 p = m4_perspective2(to_rad(80), aspect, 0.1f, 1000.0f);
         glUniformMatrix4fv(glGetUniformLocation(program, "projection"), 1, true, p.m);
 #if 1
-        M4 m = m4_mul(m4_translate(v3(0, -2.5f, -4)), m4_mul(m4_rotate_x(to_rad(-90)), m4_scale(.6f)));
+        static f32 angle = 0;
+        M4 m = m4_mul(m4_translate(v3(0, -2.5f, -4)), m4_mul(m4_mul(m4_rotate_x(to_rad(-90)), m4_rotate_z(to_rad(angle))), m4_scale(.6f)));
         glUniformMatrix4fv(glGetUniformLocation(program, "model"), 1, true, m.m);
+        angle += (20 * seconds_per_frame);
+        if(angle >= 360) {
+            angle = 0;
+        }
 #else
         M4 m = m4_mul(m4_translate(v3(0, -4.0f, -6)), m4_mul(m4_rotate_x(to_rad(0)), m4_scale(.04f)));
         glUniformMatrix4fv(glGetUniformLocation(program, "model"), 1, true, m.m);

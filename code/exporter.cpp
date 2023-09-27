@@ -312,17 +312,25 @@ void write_model(const aiScene *scene, FILE *file) {
         unsigned int last_num_bones = 0;
         for (unsigned int i = 0; i < scene->mNumMeshes; ++i) {
             aiMesh *mesh = scene->mMeshes[i];
-            printf("Mesh: %s\n", mesh->mName.C_Str());
+            printf("Mesh: %s, bones: %d\n", mesh->mName.C_Str(), mesh->mNumBones);
+            fwrite(&mesh->mNumBones, sizeof(unsigned int), 1, file);
+            
             for(unsigned int j = 0; j < mesh->mNumBones; ++j) {
                 
                 aiBone *bone = mesh->mBones[j];
                 unsigned int id = find_bone_id(root_node, bone->mName);
                 fwrite(&id, sizeof(unsigned int), 1, file);
                 fwrite(&bone->mNumWeights, sizeof(unsigned int), 1, file);
-                fwrite(bone->mWeights, sizeof(float), sizeof(float)*bone->mNumWeights, file);
-                write_matrix(bone->mOffsetMatrix, file);
+                
+                for(unsigned int weight_index = 0; weight_index < bone->mNumWeights; ++weight_index) {
+                    fwrite(&bone->mWeights[weight_index].mVertexId, sizeof(unsigned int), 1, file);
+                    fwrite(&bone->mWeights[weight_index].mWeight, sizeof(float), 1, file);
 
-                printf("%d) bone: %s bone index: %d\n", last_num_bones+j, bone->mName.C_Str(), id);
+                }
+                
+                write_matrix(bone->mOffsetMatrix, file);
+                
+                printf("%d) bone: %s bone index: %d, num weights: %d\n", last_num_bones+j, bone->mName.C_Str(), id, bone->mNumWeights);
             
             }
             last_num_bones += mesh->mNumBones;
