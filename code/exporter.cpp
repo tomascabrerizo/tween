@@ -103,7 +103,7 @@ static void write_skeleton_hierarchy(aiNode *node, FILE *file) {
     write_skeleton_node(node, file, (unsigned int)-1, &start_offset);
 }
 
-static void print_bones(aiNode *node, unsigned int *index) {
+void print_bones(aiNode *node, unsigned int *index) {
     
     printf("%d) %s\n", *index, node->mName.C_Str());
 
@@ -112,7 +112,6 @@ static void print_bones(aiNode *node, unsigned int *index) {
         aiNode *child = node->mChildren[i];
         print_bones(child, index);
     }
-
 }
 
 static bool find_bone_id_internal(aiNode *node, aiString name, unsigned int *id) {

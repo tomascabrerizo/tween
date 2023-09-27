@@ -58,6 +58,12 @@ static void read_vertex(u8 **file, Vertex *vertex) {
     vertex->color.x = 1.0f;
     vertex->color.y = 1.0f;
     vertex->color.z = 1.0f;
+
+    // NOTE: Initiallize weights
+    for(u32 i = 0; i < MAX_BONES_INFLUENCE; ++i) {
+        vertex->weights[i] = 1.0f;
+        vertex->bones_id[i] = -1.0f;
+    }
 }
 
 static void read_tween_model_file(Model *model, u8 *file) {
@@ -106,11 +112,11 @@ static void read_tween_model_file(Model *model, u8 *file) {
     
     if(flags & TWEEN_SKELETON) {
         printf("Loading skeleton for model\n");
+        
+        char skeleton_name[256];
+        read_string(&file, skeleton_name);
+        printf("Skeleton name: %s\n", skeleton_name);
     }
-
-    char skeleton_name[256];
-    read_string(&file, skeleton_name);
-    printf("Skeleton name: %s\n", skeleton_name);
 
 
 }
@@ -139,7 +145,6 @@ int main(void) {
     read_tween_model_file(&model, model_data);
     printf("File read perfectly\n");
     
-
     os_initialize();
        
     u32 window_w = 1280;
@@ -196,10 +201,13 @@ int main(void) {
         f32 aspect = (f32)window_w/(f32)window_h;
         M4 p = m4_perspective2(to_rad(80), aspect, 0.1f, 1000.0f);
         glUniformMatrix4fv(glGetUniformLocation(program, "projection"), 1, true, p.m);
-        
+#if 1
         M4 m = m4_mul(m4_translate(v3(0, -2.5f, -4)), m4_mul(m4_rotate_x(to_rad(-90)), m4_scale(.6f)));
         glUniformMatrix4fv(glGetUniformLocation(program, "model"), 1, true, m.m);
-;
+#else
+        M4 m = m4_mul(m4_translate(v3(0, -4.0f, -6)), m4_mul(m4_rotate_x(to_rad(0)), m4_scale(.04f)));
+        glUniformMatrix4fv(glGetUniformLocation(program, "model"), 1, true, m.m);
+#endif
 
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
