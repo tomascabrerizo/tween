@@ -4,6 +4,7 @@
 
 #include <stb_image.h>
 
+#include "algebra.h"
 #include "os.h"
 #include "common.h"
 #include "gpu.h"
@@ -28,8 +29,8 @@
 
 static void read_string(u8 **file, char *buffer) {
     u32 len = READ_U32(*file);
-    if(len > MESH_MAX_NAME_SIZE) {
-        len = MESH_MAX_NAME_SIZE;
+    if(len > MAX_NAME_SIZE) {
+        len = MAX_NAME_SIZE;
     }
     memcpy(buffer, *file, len);
     buffer[len] = '\0';
@@ -86,6 +87,19 @@ static void read_matrix(u8 **file, M4 *matrix) {
     matrix->m[15] = READ_F32(*file);
 }
 
+static void read_v3(u8 **file, V3 *vector) {
+    vector->x = READ_F32(*file);
+    vector->y = READ_F32(*file);
+    vector->z = READ_F32(*file);
+}
+
+static void read_q4(u8 **file, Q4 *quat) {
+    quat->w = READ_F32(*file);
+    quat->x = READ_F32(*file);
+    quat->y = READ_F32(*file);
+    quat->z = READ_F32(*file);
+}
+
 static void add_weight_to_vertex(Vertex *vertex, u32 bone_id, f32 weight) {
 
     for(u32 i = 0; i < MAX_BONES_INFLUENCE; ++i) {
@@ -95,6 +109,28 @@ static void add_weight_to_vertex(Vertex *vertex, u32 bone_id, f32 weight) {
             return;
         }
     }
+}
+
+static u8 *read_entire_file(const char *path, u32 *file_size_ptr) {
+
+    FILE *file = fopen(path, "rb");
+    if(file == nullptr) {
+        printf("Error: cannot open file\n");
+        return nullptr;
+    }
+    fseek(file, 0, SEEK_END);
+    u32 file_size = (u64)ftell(file);
+    fseek(file, 0, SEEK_SET);
+    u8 *data = (u8 *)malloc(file_size + 1);
+    fread(data, file_size, 1, file);
+    data[file_size] = '\0';
+    fclose(file);
+
+    if(file_size_ptr != nullptr) {
+        *file_size_ptr = file_size;
+    }
+
+    return data;
 }
 
 static void read_tween_model_file(Model *model, u8 *file) {
@@ -145,9 +181,17 @@ static void read_tween_model_file(Model *model, u8 *file) {
         
         char skeleton_name[256];
         read_string(&file, skeleton_name);
-        printf("Skeleton name: %s\n", skeleton_name);
-
+        u32 total_number_of_bones = READ_U32(file);
+        
+        printf("Skeleton name: %s, total bones: %d\n", skeleton_name, total_number_of_bones);
         printf("Loading vertex weights for skeleton ... \n");
+        
+        model->num_inv_bind_transform = total_number_of_bones;
+        model->inv_bind_transform = (M4 *)malloc(sizeof(M4)*model->num_inv_bind_transform);
+        // NOTE: Initializer all matrices to the identity
+        for(u32 bone_index = 0; bone_index < total_number_of_bones; ++bone_index) {
+            model->inv_bind_transform[bone_index] = m4_identity();
+        }
 
         for(u32 mesh_index = 0; mesh_index < model->num_meshes; ++mesh_index) {
             Mesh *mesh = model->meshes + mesh_index; (void)mesh;
@@ -155,9 +199,6 @@ static void read_tween_model_file(Model *model, u8 *file) {
             u32 number_of_bones = READ_U32(file);
             printf("number of bones: %d\n", number_of_bones);
             
-            mesh->num_inv_bind_transform = number_of_bones;
-            mesh->inv_bind_transform = (M4 *)malloc(sizeof(M4)*mesh->num_inv_bind_transform);
-
             for(u32 bone_index = 0; bone_index < number_of_bones; ++bone_index) {
                 
                 u32 current_bone_id = READ_U32(file);
@@ -171,39 +212,189 @@ static void read_tween_model_file(Model *model, u8 *file) {
                     Vertex *vertex = mesh->vertices + vertex_index;
                     add_weight_to_vertex(vertex, current_bone_id, weight);
                 }
-                read_matrix(&file, &mesh->inv_bind_transform[bone_index]);
+                ASSERT(current_bone_id < total_number_of_bones);
+                read_matrix(&file, &model->inv_bind_transform[current_bone_id]);
             }
         }
 
         printf("All vertices ready for animation!\n");
-
     }
 }
 
+static void read_bone(u8 **file, Bone *bone) {
+    
+    bone->parent = READ_S32(*file);
+    read_matrix(file, &bone->transformation);
+    
+    printf("bone parent index: %d\n", bone->parent);
+}
+
+static void read_keyframe(u8 **file, KeyFrame *frame) {
+    frame->num_animated_bones = READ_U32(*file);
+    
+    frame->bone_ids    = (u32 *)malloc(sizeof(u32)*frame->num_animated_bones);
+    frame->time_stamps = (f32 *)malloc(sizeof(f32)*frame->num_animated_bones);
+    frame->positions   = (V3 *)malloc(sizeof(V3)*frame->num_animated_bones);
+    frame->rotations   = (Q4 *)malloc(sizeof(Q4)*frame->num_animated_bones);
+    frame->scales      = (V3 *)malloc(sizeof(V3)*frame->num_animated_bones);
+    
+    for(u32 animated_bone_index = 0; animated_bone_index < frame->num_animated_bones; ++animated_bone_index) {
+        frame->bone_ids[animated_bone_index] = READ_U32(*file);
+        frame->time_stamps[animated_bone_index] = READ_F32(*file);
+        read_v3(file, &frame->positions[animated_bone_index]);
+        read_q4(file, &frame->rotations[animated_bone_index]);
+        read_v3(file, &frame->scales[animated_bone_index]);
+    }
+
+}
+
+static void read_tween_skeleton_file(Skeleton *skeleton, u8 *file) {
+
+    u32 magic = READ_U32(file);
+    ASSERT(magic == TWEEN_MAGIC);
+
+    u32 flags = READ_U32(file);
+
+    if(flags & TWEEN_ANIMATIONS) {
+        printf("Loading Animation file\n");
+    }
+    
+    ASSERT(flags & TWEEN_ANIMATIONS);
+
+    read_string(&file, skeleton->name);
+    skeleton->num_bones = READ_U32(file);
+    skeleton->bones = (Bone *)malloc(sizeof(Bone)*skeleton->num_bones);
+    printf("Loaded skeleton name: %s, number of bones: %d\n", skeleton->name, skeleton->num_bones);
+
+    for(u32 bone_index = 0; bone_index < skeleton->num_bones; ++bone_index) {
+        Bone *bone = skeleton->bones + bone_index;
+        read_bone(&file, bone);
+    }
+    
+    skeleton->num_animations = READ_U32(file);
+    skeleton->animations = (Animation *)malloc(sizeof(Animation)*skeleton->num_animations);
+
+    printf("Number of animations: %d\n", skeleton->num_animations);
+
+    for(u32 animation_index = 0; animation_index < skeleton->num_animations; ++animation_index) {
+        Animation *animation = skeleton->animations + animation_index; 
+        read_string(&file, animation->name);
+        animation->duration = READ_F32(file);
+        animation->num_frames = READ_U32(file);
+        animation->frames = (KeyFrame *)malloc(sizeof(KeyFrame)*animation->num_frames);
+        
+        for(u32 frame_index = 0; frame_index < animation->num_frames; ++frame_index) {
+            KeyFrame *frame = animation->frames + frame_index;
+            read_keyframe(&file, frame);
+        }
+
+        printf("Animation name: %s, duration: %f, keyframes: %d\n", animation->name, animation->duration, animation->num_frames);
+
+    }
+
+    printf("Animation complete loading perfectly!\n");
+}
+
+static void calculate_prev_and_next_animation_keyframs(Animation *animation, KeyFrame *prev, KeyFrame *next, f32 animation_time) {
+    (void)prev; (void)next; (void)animation_time;
+    
+    u32 prev_frame_index = 0;
+    u32 next_frame_index = 1;
+
+    for(u32 frame_index = 1; frame_index < animation->num_frames; ++frame_index) {
+        KeyFrame *frame = animation->frames + frame_index;
+        ASSERT(frame->num_animated_bones > 0);
+        f32 frame_time_stamp = frame->time_stamps[0];
+
+        if(frame_time_stamp > animation_time) {
+            next_frame_index = frame_index;
+            break;
+        }
+    }
+    
+    ASSERT(next_frame_index > 0);
+    prev_frame_index = (next_frame_index - 1);
+
+    *prev = animation->frames[prev_frame_index];
+    *next = animation->frames[next_frame_index];
+}
+
+static void calculate_bones_transform(KeyFrame *prev, KeyFrame *next, Model *model, Skeleton *skeleton, float animation_time, M4 *final_transforms) {
+    
+        f32 prev_frame_time_stamp = prev->time_stamps[0];
+        f32 next_frame_time_stamp = next->time_stamps[0];
+
+        f32 progression = (animation_time - prev_frame_time_stamp) / (next_frame_time_stamp - prev_frame_time_stamp);
+        
+        ASSERT(prev->num_animated_bones == next->num_animated_bones);
+
+        for(u32 keyframe_bone_index = 0; keyframe_bone_index < prev->num_animated_bones; ++keyframe_bone_index) {
+            
+            V3 final_position = v32_lerp(prev->positions[keyframe_bone_index], next->positions[keyframe_bone_index], progression);
+            V3 final_scale    = v32_lerp(prev->scales[keyframe_bone_index], next->scales[keyframe_bone_index], progression);
+            Q4 final_rotation = q4_slerp(prev->rotations[keyframe_bone_index], next->rotations[keyframe_bone_index], progression);
+
+            (void)final_scale;
+            
+            ASSERT(prev->bone_ids[keyframe_bone_index] == next->bone_ids[keyframe_bone_index]);
+            u32 bone_id = prev->bone_ids[keyframe_bone_index];
+            final_transforms[bone_id] = m4_mul(m4_translate(final_position), m4_mul(q4_to_m4(final_rotation), m4_scale_v3(final_scale)));
+        }
+        
+        for(u32 bone_index = 0; bone_index < skeleton->num_bones; ++bone_index) {
+            Bone *bone = skeleton->bones + bone_index;
+            if(bone->parent == ((u32)-1)) {
+                final_transforms[bone_index] = m4_mul(m4_identity(), final_transforms[bone_index]);
+            } else {
+                ASSERT(bone->parent < bone_index);
+                final_transforms[bone_index] = m4_mul(final_transforms[bone->parent], final_transforms[bone_index]);
+
+            }
+        }
+
+        ASSERT(skeleton->num_bones == model->num_inv_bind_transform);
+        
+        for(u32 bone_index = 0; bone_index < skeleton->num_bones; ++bone_index) {
+            final_transforms[bone_index] = m4_mul(final_transforms[bone_index], model->inv_bind_transform[bone_index]);
+        }
+}
+
+static void update_animation(Model *model, Skeleton *skeleton, M4 *final_transforms, f32 dt) {
+    
+    ASSERT(skeleton->num_animations > 0);
+    Animation *animation = &skeleton->animations[0];
+
+    static float animation_time = 0;
+    animation_time += dt;
+    if(animation_time > animation->duration) {
+        animation_time = 0;
+    }
+    
+    (void)animation, (void)model, (void)final_transforms, (void)dt;
+
+    KeyFrame prev, next;
+    calculate_prev_and_next_animation_keyframs(animation, &prev, &next, animation_time);
+    calculate_bones_transform(&prev, &next, model, skeleton, animation_time, final_transforms);
+}
 
 int main(void) {
 
-    FILE *file_model = fopen("./data/model.twm", "rb");
-
-    if(file_model == nullptr) {
-        printf("Error: cannot open file\n");
-        return 1;
-    }
-
-    fseek(file_model, 0, SEEK_END);
-    u64 file_size = (u64)ftell(file_model);
-    fseek(file_model, 0, SEEK_SET);
-    
-    u8 *model_data = (u8 *)malloc(file_size + 1);
-    fread(model_data, file_size, 1, file_model);
-    model_data[file_size] = '\0';
-
-    fclose(file_model);
-    
+    u8 *model_file = read_entire_file("./data/model.twm", nullptr);
     Model model;
-    read_tween_model_file(&model, model_data);
+    read_tween_model_file(&model, model_file);
     printf("File read perfectly\n");
     
+    printf("\n---------------------------\n");
+
+    u8 *animation_file = read_entire_file("./data/model.twa", nullptr);
+    Skeleton skeleton;
+    read_tween_skeleton_file(&skeleton, animation_file);
+    
+    M4 *final_transforms = (M4 *)malloc(sizeof(M4)*skeleton.num_bones);
+    for(u32 transform_index = 0; transform_index < skeleton.num_bones; ++transform_index) {
+        final_transforms[transform_index] = m4_identity();
+    }
+
     os_initialize();
        
     u32 window_w = 1280;
@@ -230,7 +421,7 @@ int main(void) {
     }
 
     // NOTE: Create GPU shaders
-    u32 program = gpu_create_prorgam((char *)"./shaders/vert_simple.glsl", (char *)"./shaders/frag_simple.glsl");
+    u32 program = gpu_create_prorgam((char *)"./shaders/vert.glsl", (char *)"./shaders/frag.glsl");
     glUseProgram(program);
     
     glEnable(GL_DEPTH_TEST);
@@ -243,6 +434,8 @@ int main(void) {
     u64 last_time = os_get_ticks();
     
     while(!window->should_close) {
+
+        update_animation(&model, &skeleton, final_transforms, seconds_per_frame);
         
         window_w = window_width(window);
         window_h = window_height(window);
@@ -260,18 +453,26 @@ int main(void) {
         f32 aspect = (f32)window_w/(f32)window_h;
         M4 p = m4_perspective2(to_rad(80), aspect, 0.1f, 1000.0f);
         glUniformMatrix4fv(glGetUniformLocation(program, "projection"), 1, true, p.m);
-#if 1
+
+        for(u32 i = 0;  i < skeleton.num_bones; ++i) {
+            char bone_matrix_name[1024];
+            sprintf(bone_matrix_name, "bone_matrix[%d]", i);
+            M4 bone_matrix = final_transforms[i];
+            glUniformMatrix4fv(glGetUniformLocation(program, bone_matrix_name), 1, true, bone_matrix.m);
+        }
+
         static f32 angle = 0;
-        M4 m = m4_mul(m4_translate(v3(0, -2.5f, -4)), m4_mul(m4_mul(m4_rotate_x(to_rad(-90)), m4_rotate_z(to_rad(angle))), m4_scale(.6f)));
+#if 1
+        M4 m = m4_mul(m4_translate(v3(0, -1, -2)), m4_mul(m4_mul(m4_rotate_y(to_rad(angle)) ,m4_rotate_x(to_rad(-90))), m4_scale(.2)));
+#else
+        M4 m = m4_mul(m4_translate(v3(0, -1, -2)), m4_mul(m4_rotate_y(to_rad(angle)), m4_scale(.012f)));
+#endif
         glUniformMatrix4fv(glGetUniformLocation(program, "model"), 1, true, m.m);
+
         angle += (20 * seconds_per_frame);
         if(angle >= 360) {
             angle = 0;
         }
-#else
-        M4 m = m4_mul(m4_translate(v3(0, -4.0f, -6)), m4_mul(m4_rotate_x(to_rad(0)), m4_scale(.04f)));
-        glUniformMatrix4fv(glGetUniformLocation(program, "model"), 1, true, m.m);
-#endif
 
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -297,6 +498,8 @@ int main(void) {
             delta_time = current_time - last_time;
         }
         last_time = current_time; (void)last_time;
+
+        //printf("ms: %f, fps: %f\n", (f32)delta_time, ((f32)1/delta_time) * 1000);
     }
     
     os_gl_destroy_context(window);

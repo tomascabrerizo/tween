@@ -182,7 +182,12 @@ static aiNode *find_root_node(const aiScene *scene) {
     return node;
 }
 
-void write_animation(const aiScene *scene, FILE *file) {
+void write_skeleton(const aiScene *scene, FILE *file, const char *skeleton_name, unsigned int num_animations) {
+}
+
+void write_animation(const aiScene *scene, FILE *file, const char *animation_name) {
+
+    (void)animation_name;
 
     unsigned int flags = 0;
     if(scene->HasAnimations()) {
@@ -306,9 +311,12 @@ void write_model(const aiScene *scene, FILE *file) {
         aiNode *root_node = find_root_node(scene);
         assert(root_node);
         
-        printf("Skeleton name: %s\n", root_node->mName.C_Str());
+        unsigned int total_bones = 0;
+        count_child_nodes(root_node, &total_bones);
+        printf("Skeleton name: %s, total bones: %d\n", root_node->mName.C_Str(), total_bones);
         write_string(root_node->mName, file);
-
+        fwrite(&total_bones, sizeof(unsigned int), 1, file);
+        
         unsigned int last_num_bones = 0;
         for (unsigned int i = 0; i < scene->mNumMeshes; ++i) {
             aiMesh *mesh = scene->mMeshes[i];
@@ -345,44 +353,85 @@ int main(void) {
 
     Assimp::Importer importer;
 
-    const aiScene *scene = importer.ReadFile("./data/model.dae", 
+    const aiScene *model = importer.ReadFile("./data/Breakdance 1990.dae", 
             aiProcess_Triangulate           |
             aiProcess_JoinIdenticalVertices |
             aiProcess_SortByPType); 
-
-    if(scene == nullptr) {
+    if(model == nullptr) {
         printf("Assimp error: %s\n", importer.GetErrorString());
         return 1;
     }
     
-    unsigned int magic = TWEEN_MAGIC;
-    
-    // NOTE: Write animation file
+    const aiScene *skeleton = importer.ReadFile("./data/Breakdance 1990.dae", 
+            aiProcess_Triangulate           |
+            aiProcess_JoinIdenticalVertices |
+            aiProcess_SortByPType); 
+    if(skeleton == nullptr) {
+        printf("Assimp error: %s\n", importer.GetErrorString());
+        return 1;
+    }
 
-    FILE *animation = fopen("./data/model.twa", "wb");
-    if(animation == nullptr) {
+    const aiScene *breakdance = importer.ReadFile("./data/Breakdance 1990.dae", 
+            aiProcess_Triangulate           |
+            aiProcess_JoinIdenticalVertices |
+            aiProcess_SortByPType); 
+    if(breakdance == nullptr) {
+        printf("Assimp error: %s\n", importer.GetErrorString());
+        return 1;
+    }
+
+    const aiScene *sillydance = importer.ReadFile("./data/Breakdance 1990.dae", 
+            aiProcess_Triangulate           |
+            aiProcess_JoinIdenticalVertices |
+            aiProcess_SortByPType); 
+    if(sillydance == nullptr) {
+        printf("Assimp error: %s\n", importer.GetErrorString());
+        return 1;
+    }
+
+    const aiScene *dancingtwerk = importer.ReadFile("./data/Breakdance 1990.dae", 
+            aiProcess_Triangulate           |
+            aiProcess_JoinIdenticalVertices |
+            aiProcess_SortByPType); 
+    if(dancingtwerk == nullptr) {
+        printf("Assimp error: %s\n", importer.GetErrorString());
+        return 1;
+    }
+
+    
+    unsigned int magic = TWEEN_MAGIC;
+
+    FILE *animation_file = fopen("./data/model.twa", "wb");
+    if(animation_file == nullptr) {
         printf("Cannot open specified file\n");
         return 1;
     }
     
-
     printf("Magic Number: %d\n", magic);
-    fwrite(&magic, sizeof(unsigned int), 1, animation);
-    write_animation(scene, animation);
-    fclose(animation);
+    fwrite(&magic, sizeof(unsigned int), 1, animation_file);
+    
+    // NOTE: Write skeleton:
+    write_skeleton(skeleton, animation_file, "constructor", 3);
+    
+    // NOTE: Write animation file
+    write_animation(breakdance,   animation_file, "break_dance");
+    write_animation(sillydance,   animation_file, "silly dance");
+    write_animation(dancingtwerk, animation_file, "dancing twerk");
+
+    fclose(animation_file);
 
     // NOTE: Write model file
 
-    FILE *model = fopen("./data/model.twm", "wb");
+    FILE *model_file = fopen("./data/model.twm", "wb");
     if(model == nullptr) {
         printf("Cannot open specified file\n");
         return 1;
     }
 
     printf("Magic Number: %d\n", magic);
-    fwrite(&magic, sizeof(unsigned int), 1, model);
-    write_model(scene, model);
-    fclose(model);
+    fwrite(&magic, sizeof(unsigned int), 1, model_file);
+    write_model(model, model_file);
+    fclose(model_file);
 
     return 0;
 }

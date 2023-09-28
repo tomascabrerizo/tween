@@ -16,7 +16,7 @@ typedef struct Vertex {
 
 } Vertex;
 
-#define MESH_MAX_NAME_SIZE 256
+#define MAX_NAME_SIZE 256
 typedef struct Mesh {
     
     u32 vao;
@@ -31,42 +31,56 @@ typedef struct Mesh {
     u32 *indices;
     u32 num_indices;
 
-    char material[MESH_MAX_NAME_SIZE];
+    char material[MAX_NAME_SIZE];
     
-    M4 *inv_bind_transform;
-    u32 num_inv_bind_transform;
-
 } Mesh;
-
-typedef struct Joint {
-    
-    u32 id;
-    
-    M4 local_bind_transform;
-    M4 invers_bind_transform;
-
-    struct Joint *parent;
-    struct Joint *first;
-    struct Joint *last;
-    struct Joint *next;
-
-} Joint;
-
-struct BoneInfo;
 
 typedef struct Model {
     
     Mesh *meshes;
     u32 num_meshes;
+
+    M4 *inv_bind_transform;
+    u32 num_inv_bind_transform;
     
-    struct BoneInfo *bone_info_registry;
-    u32 bone_info_registry_count;
-    u32 bone_info_registry_capacity;
-
-    Joint *root;
-    u32 num_joint;
-
 } Model;
+
+typedef struct Bone {
+    u32 parent;
+    M4 transformation;
+} Bone;
+
+typedef struct KeyFrame {
+    
+    u32 *bone_ids;
+    f32 *time_stamps;
+    
+    V3 *positions;
+    Q4 *rotations;
+    V3 *scales;
+    
+    u32 num_animated_bones;
+
+} KeyFrame;
+
+typedef struct Animation {
+    char name[MAX_NAME_SIZE];
+    f32 duration;
+    KeyFrame *frames;
+    u32 num_frames;
+} Animation;
+
+typedef struct Skeleton {
+
+    char name[MAX_NAME_SIZE];
+    
+    Bone *bones;
+    u32 num_bones;
+
+    Animation *animations;
+    u32 num_animations;
+
+} Skeleton;
 
 u32 gpu_create_prorgam(char *vert, char *frag);
 
