@@ -17,6 +17,8 @@
 Display *g_x11_display = 0;
 int g_x11_screen = 0;
 
+u32 os_keyboard[1024];
+
 OsFile *os_file_read_entire(const char *path) {
     OsFile *result = (OsFile *)malloc(sizeof(OsFile));
 
@@ -210,7 +212,30 @@ void os_window_poll_events(struct OsWindow *window) {
             } else if(sym == XK_Left) {
             } else if(sym == XK_BackSpace) {
             } else if(sym == XK_Delete) {
-            } else {
+            } else if(sym == XK_1) {
+                os_keyboard['1'] = true;
+            } else if(sym == XK_2) {
+                os_keyboard['2'] = true;
+            } else if(sym == XK_3) {
+                os_keyboard['3'] = true;
+            }
+
+        } break;
+
+        case KeyRelease: {
+
+            KeySym sym = XLookupKeysym(&e.xkey, 0);
+
+            if(sym == XK_Right) {
+            } else if(sym == XK_Left) {
+            } else if(sym == XK_BackSpace) {
+            } else if(sym == XK_Delete) {
+            } else if(sym == XK_1) {
+                os_keyboard['1'] = false;
+            } else if(sym == XK_2) {
+                os_keyboard['2'] = false;
+            } else if(sym == XK_3) {
+                os_keyboard['3'] = false;
             }
 
         } break;

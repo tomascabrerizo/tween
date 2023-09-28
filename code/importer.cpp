@@ -359,10 +359,10 @@ static void calculate_bones_transform(KeyFrame *prev, KeyFrame *next, Model *mod
         }
 }
 
-static void update_animation(Model *model, Skeleton *skeleton, M4 *final_transforms, f32 dt) {
+static void update_animation(Model *model, Skeleton *skeleton, M4 *final_transforms, f32 dt, u32 animation_index) {
     
     ASSERT(skeleton->num_animations > 0);
-    Animation *animation = &skeleton->animations[0];
+    Animation *animation = &skeleton->animations[animation_index];
 
     static float animation_time = 0;
     animation_time += dt;
@@ -433,17 +433,28 @@ int main(void) {
     f32 seconds_per_frame = (f32)miliseconds_per_frame / 1000.0f;
     u64 last_time = os_get_ticks();
     
+    u32 animation_index = 0;
+
     while(!window->should_close) {
 
-        update_animation(&model, &skeleton, final_transforms, seconds_per_frame);
+        os_window_poll_events(window);
+
+        if(os_keyboard[(u32)'1']) {
+            animation_index = 0;
+        }
+        if(os_keyboard[(u32)'2']) {
+            animation_index = 1;
+        }
+        if(os_keyboard[(u32)'3']) {
+            animation_index = 2;
+        }
+        
+        update_animation(&model, &skeleton, final_transforms, seconds_per_frame, animation_index);
         
         window_w = window_width(window);
         window_h = window_height(window);
 
         glViewport(0, 0, window_w, window_h);
-
-        os_window_poll_events(window);
-        (void)seconds_per_frame;
 
         glUseProgram(program);
 
@@ -462,7 +473,7 @@ int main(void) {
         }
 
         static f32 angle = 0;
-#if 1
+#if 0
         M4 m = m4_mul(m4_translate(v3(0, -1, -2)), m4_mul(m4_mul(m4_rotate_y(to_rad(angle)) ,m4_rotate_x(to_rad(-90))), m4_scale(.2)));
 #else
         M4 m = m4_mul(m4_translate(v3(0, -1, -2)), m4_mul(m4_rotate_y(to_rad(angle)), m4_scale(.012f)));

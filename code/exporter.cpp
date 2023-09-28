@@ -1,6 +1,7 @@
 #include <assimp/anim.h>
 #include <assimp/matrix4x4.h>
 #include <assimp/types.h>
+#include <cstring>
 #include <stdio.h>
 #include <assert.h>
 
@@ -43,6 +44,12 @@ static void write_key_frame(unsigned int id, aiVectorKey position_key, aiQuatKey
 static void write_string(aiString string, FILE *file) {
     fwrite(&string.length, sizeof(unsigned int), 1, file);
     fwrite(string.data, sizeof(char), string.length, file);
+}
+
+static void write_string_cstr(const char *string, FILE *file) {
+    unsigned int len = strlen(string);
+    fwrite(&len, sizeof(unsigned int), 1, file);
+    fwrite(string, sizeof(char), len, file);
 }
 
 static void write_matrix(aiMatrix4x4 matrix, FILE *file) {
@@ -183,12 +190,6 @@ static aiNode *find_root_node(const aiScene *scene) {
 }
 
 void write_skeleton(const aiScene *scene, FILE *file, const char *skeleton_name, unsigned int num_animations) {
-}
-
-void write_animation(const aiScene *scene, FILE *file, const char *animation_name) {
-
-    (void)animation_name;
-
     unsigned int flags = 0;
     if(scene->HasAnimations()) {
         flags |= TWEEN_ANIMATIONS;
@@ -202,43 +203,43 @@ void write_animation(const aiScene *scene, FILE *file, const char *animation_nam
     aiNode *root_node = find_root_node(scene);
     assert(root_node);
     
-    printf("Skeleton name: %s\n", root_node->mName.C_Str());
-    write_string(root_node->mName, file);
+    printf("Skeleton name: %s\n", skeleton_name);
+    write_string_cstr(skeleton_name, file);
     write_skeleton_hierarchy(root_node, file);
 
-    printf("Number of animations: %d\n", scene->mNumAnimations);
-    fwrite(&scene->mNumAnimations, sizeof(unsigned int), 1, file);
+    printf("Number of animations: %d\n", num_animations);
+    fwrite(&num_animations, sizeof(unsigned int), 1, file);
+}
+
+void write_animation(const aiScene *scene, FILE *file, const char *animation_name) {
+
+    assert(scene->mNumAnimations > 0);
+    aiAnimation *animation = scene->mAnimations[0];
+
+    /* NOTE: The animations are spected to have to same number of keyframes for each bone */
+    assert(animation->mNumChannels > 0);
+    unsigned int num_keyframes = animation->mChannels[0]->mNumPositionKeys; 
+    assert(num_keyframes == animation->mChannels[0]->mNumRotationKeys);
+
+    float duration = animation->mDuration/1000.0f;
+    printf("Animation name: %s, duration: %f\n", animation_name, duration);
+    write_string_cstr(animation_name, file);
+    fwrite(&duration, sizeof(float), 1, file);
+    fwrite(&num_keyframes, sizeof(unsigned int), 1, file);
     
+    aiNode *root_node = find_root_node(scene);
 
-    for(unsigned int animation_index = 0; animation_index < scene->mNumAnimations; ++animation_index) {
-        aiAnimation *animation = scene->mAnimations[animation_index];
+    for(unsigned int keyframe_index = 0; keyframe_index < num_keyframes; ++keyframe_index) {
+        
+        fwrite(&animation->mNumChannels, sizeof(unsigned int), 1, file);
 
-        /* NOTE: The animations are spected to have to same number of keyframes for each bone */
-        assert(animation->mNumChannels > 0);
-        unsigned int num_keyframes = animation->mChannels[0]->mNumPositionKeys; 
-        assert(num_keyframes == animation->mChannels[0]->mNumRotationKeys);
+        for(unsigned int bone_index = 0; bone_index < animation->mNumChannels; ++bone_index) {
 
-        float duration = animation->mDuration/1000.0f;
-        printf("Animation name: %s, duration: %f\n", animation->mName.C_Str(), duration);
-        write_string(animation->mName, file);
-        fwrite(&duration, sizeof(float), 1, file);
-        fwrite(&num_keyframes, sizeof(unsigned int), 1, file);
-
-        for(unsigned int keyframe_index = 0; keyframe_index < num_keyframes; ++keyframe_index) {
-            
-            fwrite(&animation->mNumChannels, sizeof(unsigned int), 1, file);
-
-            for(unsigned int bone_index = 0; bone_index < animation->mNumChannels; ++bone_index) {
-
-                aiNodeAnim *node = animation->mChannels[bone_index];
-                unsigned int id = find_bone_id(root_node, node->mNodeName);
-                write_key_frame(id, node->mPositionKeys[keyframe_index], node->mRotationKeys[keyframe_index], node->mScalingKeys[keyframe_index], file);
-            }
+            aiNodeAnim *node = animation->mChannels[bone_index];
+            unsigned int id = find_bone_id(root_node, node->mNodeName);
+            write_key_frame(id, node->mPositionKeys[keyframe_index], node->mRotationKeys[keyframe_index], node->mScalingKeys[keyframe_index], file);
         }
     }
-
-    printf("Animation file write perfectly\n");
-
 }
 
 void write_model(const aiScene *scene, FILE *file) {
@@ -351,50 +352,53 @@ void write_model(const aiScene *scene, FILE *file) {
 
 int main(void) {
 
-    Assimp::Importer importer;
-
-    const aiScene *model = importer.ReadFile("./data/Breakdance 1990.dae", 
+    Assimp::Importer importer0;
+    const aiScene *model = importer0.ReadFile("./data/Silly Dancing.dae", 
             aiProcess_Triangulate           |
             aiProcess_JoinIdenticalVertices |
             aiProcess_SortByPType); 
     if(model == nullptr) {
-        printf("Assimp error: %s\n", importer.GetErrorString());
+        printf("Assimp error: %s\n", importer0.GetErrorString());
         return 1;
     }
     
-    const aiScene *skeleton = importer.ReadFile("./data/Breakdance 1990.dae", 
+    Assimp::Importer importer1;
+    const aiScene *skeleton = importer1.ReadFile("./data/Silly Dancing.dae", 
             aiProcess_Triangulate           |
             aiProcess_JoinIdenticalVertices |
             aiProcess_SortByPType); 
     if(skeleton == nullptr) {
-        printf("Assimp error: %s\n", importer.GetErrorString());
+        printf("Assimp error: %s\n", importer1.GetErrorString());
         return 1;
     }
 
-    const aiScene *breakdance = importer.ReadFile("./data/Breakdance 1990.dae", 
+    Assimp::Importer importer2;
+    const aiScene *flair = importer2.ReadFile("./data/Flair.dae", 
             aiProcess_Triangulate           |
             aiProcess_JoinIdenticalVertices |
             aiProcess_SortByPType); 
-    if(breakdance == nullptr) {
-        printf("Assimp error: %s\n", importer.GetErrorString());
+    if(flair == nullptr) {
+        printf("Assimp error: %s\n", importer2.GetErrorString());
         return 1;
     }
 
-    const aiScene *sillydance = importer.ReadFile("./data/Breakdance 1990.dae", 
+    Assimp::Importer importer3;
+    const aiScene *sillydance = importer3.ReadFile("./data/Silly Dancing.dae", 
             aiProcess_Triangulate           |
             aiProcess_JoinIdenticalVertices |
             aiProcess_SortByPType); 
     if(sillydance == nullptr) {
-        printf("Assimp error: %s\n", importer.GetErrorString());
+        printf("Assimp error: %s\n", importer3.GetErrorString());
         return 1;
     }
 
-    const aiScene *dancingtwerk = importer.ReadFile("./data/Breakdance 1990.dae", 
+    Assimp::Importer importer4;
+    const aiScene *dancingtwerk = importer4.ReadFile("./data/Dancing Twerk.dae", 
             aiProcess_Triangulate           |
             aiProcess_JoinIdenticalVertices |
             aiProcess_SortByPType); 
     if(dancingtwerk == nullptr) {
-        printf("Assimp error: %s\n", importer.GetErrorString());
+        printf("Assimp error: %s\n", importer4.GetErrorString());
         return 1;
     }
 
@@ -414,16 +418,18 @@ int main(void) {
     write_skeleton(skeleton, animation_file, "constructor", 3);
     
     // NOTE: Write animation file
-    write_animation(breakdance,   animation_file, "break_dance");
     write_animation(sillydance,   animation_file, "silly dance");
+    write_animation(flair,   animation_file, "falir");
     write_animation(dancingtwerk, animation_file, "dancing twerk");
+    
+    printf("Skeleton and all animation written perfectly\n");
 
     fclose(animation_file);
 
     // NOTE: Write model file
 
     FILE *model_file = fopen("./data/model.twm", "wb");
-    if(model == nullptr) {
+    if(model_file == nullptr) {
         printf("Cannot open specified file\n");
         return 1;
     }
@@ -431,6 +437,7 @@ int main(void) {
     printf("Magic Number: %d\n", magic);
     fwrite(&magic, sizeof(unsigned int), 1, model_file);
     write_model(model, model_file);
+    
     fclose(model_file);
 
     return 0;

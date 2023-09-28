@@ -23,6 +23,8 @@ void os_initialize(void);
 
 void os_terminate(void);
 
+extern u32 os_keyboard[1024];
+
 typedef struct OsWindow {
     s32 width;
     s32 height;
