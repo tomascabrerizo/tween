@@ -80,6 +80,10 @@ typedef struct Skeleton {
     Animation *animations;
     u32 num_animations;
 
+    s32 active_animation;
+    s32 last_animation;
+    KeyFrame transition_keyframe;
+
 } Skeleton;
 
 u32 gpu_create_prorgam(char *vert, char *frag);

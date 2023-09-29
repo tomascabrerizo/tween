@@ -293,6 +293,19 @@ static void read_tween_skeleton_file(Skeleton *skeleton, u8 *file) {
     }
 
     printf("Animation complete loading perfectly!\n");
+    
+    skeleton->active_animation = -1;
+    skeleton->last_animation = -1;
+    
+    // TODO: find a better way to save the current keyframe
+
+    KeyFrame *frame = &skeleton->transition_keyframe;
+
+    frame->bone_ids    = (u32 *)malloc(sizeof(u32)*skeleton->num_bones);
+    frame->time_stamps = (f32 *)malloc(sizeof(f32)*skeleton->num_bones);
+    frame->positions   = (V3 *)malloc(sizeof(V3)*skeleton->num_bones);
+    frame->rotations   = (Q4 *)malloc(sizeof(Q4)*skeleton->num_bones);
+    frame->scales      = (V3 *)malloc(sizeof(V3)*skeleton->num_bones);
 }
 
 static void calculate_prev_and_next_animation_keyframs(Animation *animation, KeyFrame *prev, KeyFrame *next, f32 animation_time) {
@@ -317,6 +330,30 @@ static void calculate_prev_and_next_animation_keyframs(Animation *animation, Key
 
     *prev = animation->frames[prev_frame_index];
     *next = animation->frames[next_frame_index];
+}
+
+static void calculate_current_animation_keyframe(Animation *animation, KeyFrame *current_key_frame, f32 animation_time) {
+
+        KeyFrame prev, next;
+        calculate_prev_and_next_animation_keyframs(animation, &prev, &next, animation_time);
+
+        f32 prev_frame_time_stamp = prev.time_stamps[0];
+        f32 next_frame_time_stamp = next.time_stamps[0];
+
+        f32 progression = (animation_time - prev_frame_time_stamp) / (next_frame_time_stamp - prev_frame_time_stamp);
+
+        current_key_frame->num_animated_bones = prev.num_animated_bones;
+
+        for(u32 keyframe_bone_index = 0; keyframe_bone_index < prev.num_animated_bones; ++keyframe_bone_index) {
+
+            current_key_frame->bone_ids[keyframe_bone_index] = prev.bone_ids[keyframe_bone_index];
+            current_key_frame->time_stamps[keyframe_bone_index] = lerp(prev.time_stamps[keyframe_bone_index], next.time_stamps[keyframe_bone_index], progression);
+
+            current_key_frame->positions[keyframe_bone_index] = v32_lerp(prev.positions[keyframe_bone_index], next.positions[keyframe_bone_index], progression);
+            current_key_frame->scales[keyframe_bone_index] = v32_lerp(prev.scales[keyframe_bone_index], next.scales[keyframe_bone_index], progression);
+            current_key_frame->rotations[keyframe_bone_index] = q4_slerp(prev.rotations[keyframe_bone_index], next.rotations[keyframe_bone_index], progression);
+        }
+
 }
 
 static void calculate_bones_transform(KeyFrame *prev, KeyFrame *next, Model *model, Skeleton *skeleton, float animation_time, M4 *final_transforms) {
@@ -359,22 +396,67 @@ static void calculate_bones_transform(KeyFrame *prev, KeyFrame *next, Model *mod
         }
 }
 
-static void update_animation(Model *model, Skeleton *skeleton, M4 *final_transforms, f32 dt, u32 animation_index) {
+static void update_animation(Model *model, Skeleton *skeleton, M4 *final_transforms, f32 dt) {
     
-    ASSERT(skeleton->num_animations > 0);
-    Animation *animation = &skeleton->animations[animation_index];
+    if(skeleton->active_animation == -1) return;
 
     static float animation_time = 0;
     animation_time += dt;
-    if(animation_time > animation->duration) {
-        animation_time = 0;
-    }
-    
-    (void)animation, (void)model, (void)final_transforms, (void)dt;
 
-    KeyFrame prev, next;
-    calculate_prev_and_next_animation_keyframs(animation, &prev, &next, animation_time);
-    calculate_bones_transform(&prev, &next, model, skeleton, animation_time, final_transforms);
+    f32 transition_duration = 0.5f;
+    static f32 transition_time = 0;
+    static u32 transition_in_process = false;
+    static KeyFrame transition_key_frame_end;
+    
+    if((skeleton->last_animation != -1) && (skeleton->active_animation != skeleton->last_animation)) {
+        
+        if(transition_in_process == false) {
+            transition_in_process = true;
+
+            Animation *animation0 = &skeleton->animations[skeleton->last_animation];
+            Animation *animation1 = &skeleton->animations[skeleton->active_animation];
+
+            ASSERT(animation1->num_frames > 0);
+            calculate_current_animation_keyframe(animation0, &skeleton->transition_keyframe, animation_time);
+            transition_key_frame_end = animation1->frames[0];
+            
+            // TODO: This is a total hack NEED TO BE REFACTOR
+            skeleton->transition_keyframe.time_stamps[0] = 0;
+            transition_key_frame_end.time_stamps[0] = transition_duration;
+
+        }
+
+
+        transition_time += dt;
+        calculate_bones_transform(&skeleton->transition_keyframe, &transition_key_frame_end, model, skeleton, transition_time, final_transforms);
+
+        if(transition_time >= transition_duration) {
+            
+            animation_time = 0;
+            transition_time = 0;
+            transition_in_process = false;
+            
+            skeleton->last_animation = skeleton->active_animation;
+        }
+
+    } else {
+
+        ASSERT(skeleton->num_animations > 0);
+        Animation *animation = &skeleton->animations[skeleton->active_animation];
+
+        if(animation_time > animation->duration) {
+            animation_time = 0;
+        }
+        
+        (void)animation, (void)model, (void)final_transforms, (void)dt;
+
+        KeyFrame prev, next;
+        calculate_prev_and_next_animation_keyframs(animation, &prev, &next, animation_time);
+        calculate_bones_transform(&prev, &next, model, skeleton, animation_time, final_transforms);
+
+        skeleton->last_animation = skeleton->active_animation;
+    }
+
 }
 
 int main(void) {
@@ -433,23 +515,23 @@ int main(void) {
     f32 seconds_per_frame = (f32)miliseconds_per_frame / 1000.0f;
     u64 last_time = os_get_ticks();
     
-    u32 animation_index = 0;
 
     while(!window->should_close) {
 
         os_window_poll_events(window);
 
         if(os_keyboard[(u32)'1']) {
-            animation_index = 0;
+            skeleton.active_animation = 0;
         }
         if(os_keyboard[(u32)'2']) {
-            animation_index = 1;
+            skeleton.active_animation = 1;
         }
         if(os_keyboard[(u32)'3']) {
-            animation_index = 2;
+            skeleton.active_animation = 2;
         }
+
+        update_animation(&model, &skeleton, final_transforms, seconds_per_frame);
         
-        update_animation(&model, &skeleton, final_transforms, seconds_per_frame, animation_index);
         
         window_w = window_width(window);
         window_h = window_height(window);
