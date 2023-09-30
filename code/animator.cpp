@@ -59,6 +59,8 @@ void Animator::initialize(Model model, Skeleton skeleton) {
     
     initialize_empty_key_frame(&current_keyframe, skeleton.num_bones);
     initialize_empty_key_frame(&final_keyframe, skeleton.num_bones);
+    
+    final_transforms = (M4 *)malloc(sizeof(M4)*skeleton.num_bones);
 }
 
 void Animator::terminate(void) {
@@ -100,17 +102,16 @@ static void mix_keyframes(KeyFrame *dst, KeyFrame a, KeyFrame b, f32 t) {
     // TODO: Only mix the necesary information 
 
     ASSERT(a.num_animated_bones == b.num_animated_bones);
-    dst->num_animated_bones = a.num_animated_bones;
+    
     for(u32 keyframe_bone_index = 0; keyframe_bone_index < a.num_animated_bones; ++keyframe_bone_index) {
         
         ASSERT(a.bone_ids[keyframe_bone_index] == b.bone_ids[keyframe_bone_index]);
+        u32 bone_index = a.bone_ids[keyframe_bone_index];
 
-        dst->bone_ids[a.bone_ids[keyframe_bone_index]] = a.bone_ids[keyframe_bone_index];
-        dst->time_stamps[a.bone_ids[keyframe_bone_index]] = lerp(a.time_stamps[keyframe_bone_index], b.time_stamps[keyframe_bone_index], t);
-
-        dst->positions[a.bone_ids[keyframe_bone_index]] = v32_lerp(a.positions[keyframe_bone_index], b.positions[keyframe_bone_index], t);
-        dst->scales[a.bone_ids[keyframe_bone_index]]    = v32_lerp(a.scales[keyframe_bone_index],    b.scales[keyframe_bone_index], t);
-        dst->rotations[a.bone_ids[keyframe_bone_index]] = q4_slerp(a.rotations[keyframe_bone_index], b.rotations[keyframe_bone_index], t);
+        dst->time_stamps[bone_index] = lerp(a.time_stamps[keyframe_bone_index], b.time_stamps[keyframe_bone_index], t);
+        dst->positions[bone_index] = v32_lerp(a.positions[keyframe_bone_index], b.positions[keyframe_bone_index], t);
+        dst->rotations[bone_index] = q4_slerp(a.rotations[keyframe_bone_index], b.rotations[keyframe_bone_index], t);
+        dst->scales[bone_index] = v32_lerp(a.scales[keyframe_bone_index], b.scales[keyframe_bone_index], t);
     }
 }
 
@@ -157,21 +158,24 @@ void Animator::update(f32 dt) {
         V3 final_scale    = final_keyframe.scales[bone_index];
         final_transforms[bone_index] = m4_mul(m4_translate(final_position), m4_mul(q4_to_m4(final_rotation), m4_scale_v3(final_scale)));
     }
+    
+    if(animation_queue_size > 0) {
+        for(u32 bone_index = 0; bone_index < skeleton.num_bones; ++bone_index) {
+            Bone *bone = skeleton.bones + bone_index;
+            if(bone->parent == ((u32)-1)) {
+                final_transforms[bone_index] = m4_mul(m4_identity(), final_transforms[bone_index]);
+            } else {
+                ASSERT(bone->parent < bone_index);
+                final_transforms[bone_index] = m4_mul(final_transforms[bone->parent], final_transforms[bone_index]);
 
-    for(u32 bone_index = 0; bone_index < skeleton.num_bones; ++bone_index) {
-        Bone *bone = skeleton.bones + bone_index;
-        if(bone->parent == ((u32)-1)) {
-            final_transforms[bone_index] = m4_mul(m4_identity(), final_transforms[bone_index]);
-        } else {
-            ASSERT(bone->parent < bone_index);
-            final_transforms[bone_index] = m4_mul(final_transforms[bone->parent], final_transforms[bone_index]);
+            }
+        }
 
+        ASSERT(skeleton.num_bones == model.num_inv_bind_transform);
+        
+        for(u32 bone_index = 0; bone_index < skeleton.num_bones; ++bone_index) {
+            final_transforms[bone_index] = m4_mul(final_transforms[bone_index], model.inv_bind_transform[bone_index]);
         }
     }
 
-    ASSERT(skeleton.num_bones == model.num_inv_bind_transform);
-    
-    for(u32 bone_index = 0; bone_index < skeleton.num_bones; ++bone_index) {
-        final_transforms[bone_index] = m4_mul(final_transforms[bone_index], model.inv_bind_transform[bone_index]);
-    }
 }

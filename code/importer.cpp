@@ -8,6 +8,7 @@
 #include "os.h"
 #include "common.h"
 #include "gpu.h"
+#include "animator.h"
 
 #define TWEEN_MAGIC ((unsigned int)('E'<<24)|('E'<<16)|('W'<<8)|'T')
 
@@ -397,7 +398,7 @@ static void calculate_bones_transform(KeyFrame *prev, KeyFrame *next, Model *mod
         }
 }
 
-static void update_animation(Model *model, Skeleton *skeleton, M4 *final_transforms, f32 dt) {
+void update_animation(Model *model, Skeleton *skeleton, M4 *final_transforms, f32 dt) {
     
     if(skeleton->active_animation == -1) return;
 
@@ -461,6 +462,8 @@ static void update_animation(Model *model, Skeleton *skeleton, M4 *final_transfo
 
 int main(void) {
 
+    os_initialize();
+
     u8 *model_file = read_entire_file("./data/model.twm", nullptr);
     Model model;
     read_tween_model_file(&model, model_file);
@@ -472,12 +475,8 @@ int main(void) {
     Skeleton skeleton;
     read_tween_skeleton_file(&skeleton, animation_file);
     
-    M4 *final_transforms = (M4 *)malloc(sizeof(M4)*skeleton.num_bones);
-    for(u32 transform_index = 0; transform_index < skeleton.num_bones; ++transform_index) {
-        final_transforms[transform_index] = m4_identity();
-    }
-
-    os_initialize();
+    Animator animator;
+    animator.initialize(model, skeleton);
        
     u32 window_w = 1280;
     u32 window_h = 720;
@@ -521,17 +520,16 @@ int main(void) {
         os_window_poll_events(window);
 
         if(os_keyboard[(u32)'1']) {
-            skeleton.active_animation = 0;
+            animator.play((char *)"silly dance", 1, false);
         }
         if(os_keyboard[(u32)'2']) {
-            skeleton.active_animation = 1;
+            animator.play((char *)"falir", .1f, false);
         }
         if(os_keyboard[(u32)'3']) {
-            skeleton.active_animation = 2;
+            animator.play((char *)"dancing twerk", 1, false);
         }
 
-        update_animation(&model, &skeleton, final_transforms, seconds_per_frame);
-        
+        animator.update(seconds_per_frame);
         
         window_w = window_width(window);
         window_h = window_height(window);
@@ -550,7 +548,7 @@ int main(void) {
         for(u32 i = 0;  i < skeleton.num_bones; ++i) {
             char bone_matrix_name[1024];
             sprintf(bone_matrix_name, "bone_matrix[%d]", i);
-            M4 bone_matrix = final_transforms[i];
+            M4 bone_matrix = animator.final_transforms[i];
             glUniformMatrix4fv(glGetUniformLocation(program, bone_matrix_name), 1, true, bone_matrix.m);
         }
 
