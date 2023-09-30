@@ -2,6 +2,7 @@ Diagnostics:
     ClangTidy:
     Remove: bugprone-sizeof-expression
 
+-std=c++11
 -pedantic
 -D_GNU_SOURCE 
 -Wall

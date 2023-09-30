@@ -89,6 +89,7 @@ static void write_skeleton_node(aiNode *node, FILE *file, unsigned int parent_of
     ++(*current_offset);
      
     fwrite(&parent_offset, sizeof(unsigned int), 1, file);
+    write_string(node->mName, file);
     write_matrix(node->mTransformation, file);
 
     printf("%d) node: %s, parent offset: %d\n", offset, node->mName.C_Str(), parent_offset);

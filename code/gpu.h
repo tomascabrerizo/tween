@@ -46,6 +46,7 @@ typedef struct Model {
 } Model;
 
 typedef struct Bone {
+    char name[MAX_NAME_SIZE];
     u32 parent;
     M4 transformation;
 } Bone;

@@ -5,12 +5,12 @@ then
     mkdir build
 fi
 
-g++ -pedantic -D_GNU_SOURCE -Wall -Wextra -Werror -O0 -g -I./thirdparty -I./code \
+g++ -std=c++11 -pedantic -D_GNU_SOURCE -Wall -Wextra -Werror -O0 -g -I./thirdparty -I./code \
     ./code/exporter.cpp \
     -o ./build/export -lassimp \
     -Wno-implicit-fallthrough
 
-g++ -pedantic -D_GNU_SOURCE -Wall -Wextra -Werror -O0 -g -I./thirdparty -I./code \
+g++ -std=c++11 -pedantic -D_GNU_SOURCE -Wall -Wextra -Werror -O0 -g -I./thirdparty -I./code \
     ./thirdparty/stb_image.c \
     ./code/importer.cpp ./code/gpu.c ./code/os.c \
     -o ./build/import -lm -lX11 -lGL -lassimp -lXcursor\

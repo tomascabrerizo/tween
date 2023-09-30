@@ -224,9 +224,10 @@ static void read_tween_model_file(Model *model, u8 *file) {
 static void read_bone(u8 **file, Bone *bone) {
     
     bone->parent = READ_S32(*file);
+    read_string(file, bone->name);
     read_matrix(file, &bone->transformation);
     
-    printf("bone parent index: %d\n", bone->parent);
+    printf("bone %s: parent index: %d\n", bone->name, bone->parent);
 }
 
 static void read_keyframe(u8 **file, KeyFrame *frame) {
@@ -407,25 +408,24 @@ static void update_animation(Model *model, Skeleton *skeleton, M4 *final_transfo
     static f32 transition_time = 0;
     static u32 transition_in_process = false;
     static KeyFrame transition_key_frame_end;
-    
-    if((skeleton->last_animation != -1) && (skeleton->active_animation != skeleton->last_animation)) {
+
+    if((skeleton->last_animation != -1) && (skeleton->active_animation != skeleton->last_animation) && transition_in_process == false) {
+        transition_in_process = true;
+
+        Animation *animation0 = &skeleton->animations[skeleton->last_animation];
+        Animation *animation1 = &skeleton->animations[skeleton->active_animation];
+
+        ASSERT(animation1->num_frames > 0);
+        calculate_current_animation_keyframe(animation0, &skeleton->transition_keyframe, animation_time);
+        transition_key_frame_end = animation1->frames[0];
         
-        if(transition_in_process == false) {
-            transition_in_process = true;
+        // TODO: This is a total hack NEED TO BE REFACTOR
+        skeleton->transition_keyframe.time_stamps[0] = 0;
+        transition_key_frame_end.time_stamps[0] = transition_duration;
 
-            Animation *animation0 = &skeleton->animations[skeleton->last_animation];
-            Animation *animation1 = &skeleton->animations[skeleton->active_animation];
+    } 
 
-            ASSERT(animation1->num_frames > 0);
-            calculate_current_animation_keyframe(animation0, &skeleton->transition_keyframe, animation_time);
-            transition_key_frame_end = animation1->frames[0];
-            
-            // TODO: This is a total hack NEED TO BE REFACTOR
-            skeleton->transition_keyframe.time_stamps[0] = 0;
-            transition_key_frame_end.time_stamps[0] = transition_duration;
-
-        }
-
+    if(transition_in_process == true) {
 
         transition_time += dt;
         calculate_bones_transform(&skeleton->transition_keyframe, &transition_key_frame_end, model, skeleton, transition_time, final_transforms);
