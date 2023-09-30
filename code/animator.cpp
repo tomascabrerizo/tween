@@ -20,6 +20,14 @@ static void initialize_empty_key_frame(KeyFrame *keyframe, u32 num_bones) {
     keyframe->positions   = (V3 *)malloc(sizeof(V3)*keyframe->num_animated_bones);
     keyframe->rotations   = (Q4 *)malloc(sizeof(Q4)*keyframe->num_animated_bones);
 
+    for(u32 frame_index = 0; frame_index < keyframe->num_animated_bones; ++frame_index) {
+        keyframe->bone_ids[frame_index] = frame_index;
+        keyframe->time_stamps[frame_index] = 0;
+        keyframe->scales[frame_index] = v3(1, 1, 1);
+        keyframe->positions[frame_index] = v3(0, 0, 0);
+        keyframe->rotations[frame_index] = q4(1, 0, 0, 0);
+    }
+
 }
 
 static void terminate_key_frame(KeyFrame *keyframe) {
@@ -50,16 +58,60 @@ void Animator::initialize(Model model, Skeleton skeleton) {
     animation_queue_size = 0;
     
     initialize_empty_key_frame(&current_keyframe, skeleton.num_bones);
+    initialize_empty_key_frame(&final_keyframe, skeleton.num_bones);
 }
 
 void Animator::terminate(void) {
     terminate_key_frame(&current_keyframe);
+    terminate_key_frame(&final_keyframe);
 }
 
 void Animator::play(char *animation_name, f32 weight, bool loop) {
     Animation *animation = find_animation_by_name(&skeleton, animation_name);
     ASSERT(animation != nullptr);
     animation_queue[animation_queue_size++].initialize(animation, weight, loop);
+}
+
+static void calculate_prev_and_next_frame_for_animation(Animation *animation, KeyFrame *prev, KeyFrame *next, f32 time) {
+    u32 prev_frame_index = 0;
+    u32 next_frame_index = 1;
+
+    for(u32 frame_index = 1; frame_index < animation->num_frames; ++frame_index) {
+        KeyFrame *frame = animation->frames + frame_index;
+        ASSERT(frame->num_animated_bones > 0);
+        f32 frame_time_stamp = frame->time_stamps[0];
+
+        if(frame_time_stamp > time) {
+            next_frame_index = frame_index;
+            break;
+        }
+    }
+    
+    ASSERT(next_frame_index > 0);
+    prev_frame_index = (next_frame_index - 1);
+
+    *prev = animation->frames[prev_frame_index];
+    *next = animation->frames[next_frame_index];
+}
+
+
+static void mix_keyframes(KeyFrame *dst, KeyFrame a, KeyFrame b, f32 t) {
+    
+    // TODO: Only mix the necesary information 
+
+    ASSERT(a.num_animated_bones == b.num_animated_bones);
+    dst->num_animated_bones = a.num_animated_bones;
+    for(u32 keyframe_bone_index = 0; keyframe_bone_index < a.num_animated_bones; ++keyframe_bone_index) {
+        
+        ASSERT(a.bone_ids[keyframe_bone_index] == b.bone_ids[keyframe_bone_index]);
+
+        dst->bone_ids[a.bone_ids[keyframe_bone_index]] = a.bone_ids[keyframe_bone_index];
+        dst->time_stamps[a.bone_ids[keyframe_bone_index]] = lerp(a.time_stamps[keyframe_bone_index], b.time_stamps[keyframe_bone_index], t);
+
+        dst->positions[a.bone_ids[keyframe_bone_index]] = v32_lerp(a.positions[keyframe_bone_index], b.positions[keyframe_bone_index], t);
+        dst->scales[a.bone_ids[keyframe_bone_index]]    = v32_lerp(a.scales[keyframe_bone_index],    b.scales[keyframe_bone_index], t);
+        dst->rotations[a.bone_ids[keyframe_bone_index]] = q4_slerp(a.rotations[keyframe_bone_index], b.rotations[keyframe_bone_index], t);
+    }
 }
 
 void Animator::update(f32 dt) {
@@ -83,9 +135,43 @@ void Animator::update(f32 dt) {
     }
 
     // NOTE: Calculate and Mix all current animations keyframes
-    for(s32 animation_index = 0; animation_index < (s32)animation_queue_size; ++animation_index) {
+    for(u32 animation_index = 0; animation_index < animation_queue_size; ++animation_index) {
         PlayingAnimation *playing = animation_queue + animation_index;
-        ASSERT(!"Uninplemented codepath!"); (void)playing;
+        
+        KeyFrame prev, next;
+        calculate_prev_and_next_frame_for_animation(playing->animation, &prev, &next, playing->time);
+        
+        // TODO: remove time_stamp for each bones, all bones must have the same timestamp
+        f32 prev_frame_time_stamp = prev.time_stamps[0];
+        f32 next_frame_time_stamp = next.time_stamps[0];
+        f32 progression = (playing->time - prev_frame_time_stamp) / (next_frame_time_stamp - prev_frame_time_stamp);
+        
+        mix_keyframes(&current_keyframe, prev, next, progression);
+        mix_keyframes(&final_keyframe, final_keyframe, current_keyframe, playing->weight);
+    }
+    
+    // NOTE: Calculate final transformation Matrix
+    for(u32 bone_index = 0; bone_index < skeleton.num_bones; ++bone_index) { 
+        V3 final_position = final_keyframe.positions[bone_index];
+        Q4 final_rotation = final_keyframe.rotations[bone_index];
+        V3 final_scale    = final_keyframe.scales[bone_index];
+        final_transforms[bone_index] = m4_mul(m4_translate(final_position), m4_mul(q4_to_m4(final_rotation), m4_scale_v3(final_scale)));
     }
 
+    for(u32 bone_index = 0; bone_index < skeleton.num_bones; ++bone_index) {
+        Bone *bone = skeleton.bones + bone_index;
+        if(bone->parent == ((u32)-1)) {
+            final_transforms[bone_index] = m4_mul(m4_identity(), final_transforms[bone_index]);
+        } else {
+            ASSERT(bone->parent < bone_index);
+            final_transforms[bone_index] = m4_mul(final_transforms[bone->parent], final_transforms[bone_index]);
+
+        }
+    }
+
+    ASSERT(skeleton.num_bones == model.num_inv_bind_transform);
+    
+    for(u32 bone_index = 0; bone_index < skeleton.num_bones; ++bone_index) {
+        final_transforms[bone_index] = m4_mul(final_transforms[bone_index], model.inv_bind_transform[bone_index]);
+    }
 }

@@ -24,6 +24,8 @@ struct Animator {
     u32 animation_queue_size;
    
     KeyFrame current_keyframe;
+    KeyFrame final_keyframe;
+    M4 *final_transforms;
     
     void initialize(Model model, Skeleton skeleton);
     void terminate(void);

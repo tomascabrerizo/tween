@@ -272,6 +272,10 @@ typedef struct Q4 {
     f32 w, x, y, z;
 } Q4;
 
+static inline Q4 q4(f32 w, f32 x, f32 y, f32 z) {
+    return (Q4){w, x, y, z};
+}
+
 static inline Q4 q4_slerp(Q4 a, Q4 b, f32 t) {
 
     f32 k0, k1;
