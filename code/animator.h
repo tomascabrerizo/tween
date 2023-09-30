@@ -8,10 +8,11 @@ struct PlayingAnimation {
     f32 time;
     f32 weight;
     bool loop;
-    
+    s32 parent;
+
     Animation *animation;
 
-    void initialize(Animation *animation, f32 weight, bool loop);
+    void initialize(Animation *animation, f32 weight, s32 parent, bool loop);
 };
 
 #define MAX_ANIMATION_QUEUE 256
@@ -30,7 +31,7 @@ struct Animator {
     void initialize(Model model, Skeleton skeleton);
     void terminate(void);
 
-    void play(char *animation_name, f32 weight, bool loop);
+    void play(char *parent_bone_name, char *animation_name, f32 weight, bool loop);
     void update(f32 dt);
 
 };

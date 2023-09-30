@@ -374,31 +374,31 @@ int main(void) {
     }
 
     Assimp::Importer importer2;
-    const aiScene *flair = importer2.ReadFile("./data/Flair.dae", 
+    const aiScene *idle = importer2.ReadFile("./data/Neutral Idle.dae", 
             aiProcess_Triangulate           |
             aiProcess_JoinIdenticalVertices |
             aiProcess_SortByPType); 
-    if(flair == nullptr) {
+    if(idle == nullptr) {
         printf("Assimp error: %s\n", importer2.GetErrorString());
         return 1;
     }
 
     Assimp::Importer importer3;
-    const aiScene *sillydance = importer3.ReadFile("./data/Silly Dancing.dae", 
+    const aiScene *walking = importer3.ReadFile("./data/Walking.dae", 
             aiProcess_Triangulate           |
             aiProcess_JoinIdenticalVertices |
             aiProcess_SortByPType); 
-    if(sillydance == nullptr) {
+    if(walking == nullptr) {
         printf("Assimp error: %s\n", importer3.GetErrorString());
         return 1;
     }
 
     Assimp::Importer importer4;
-    const aiScene *dancingtwerk = importer4.ReadFile("./data/Dancing Twerk.dae", 
+    const aiScene *punch = importer4.ReadFile("./data/Combo Punch.dae", 
             aiProcess_Triangulate           |
             aiProcess_JoinIdenticalVertices |
             aiProcess_SortByPType); 
-    if(dancingtwerk == nullptr) {
+    if(punch == nullptr) {
         printf("Assimp error: %s\n", importer4.GetErrorString());
         return 1;
     }
@@ -419,9 +419,9 @@ int main(void) {
     write_skeleton(skeleton, animation_file, "constructor", 3);
     
     // NOTE: Write animation file
-    write_animation(sillydance,   animation_file, "silly dance");
-    write_animation(flair,   animation_file, "falir");
-    write_animation(dancingtwerk, animation_file, "dancing twerk");
+    write_animation(idle,   animation_file, "idle");
+    write_animation(walking,   animation_file, "walking");
+    write_animation(punch, animation_file, "punch");
     
     printf("Skeleton and all animation written perfectly\n");
 

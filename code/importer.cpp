@@ -382,10 +382,10 @@ static void calculate_bones_transform(KeyFrame *prev, KeyFrame *next, Model *mod
         
         for(u32 bone_index = 0; bone_index < skeleton->num_bones; ++bone_index) {
             Bone *bone = skeleton->bones + bone_index;
-            if(bone->parent == ((u32)-1)) {
+            if(bone->parent == -1) {
                 final_transforms[bone_index] = m4_mul(m4_identity(), final_transforms[bone_index]);
             } else {
-                ASSERT(bone->parent < bone_index);
+                ASSERT(bone->parent < (s32)bone_index);
                 final_transforms[bone_index] = m4_mul(final_transforms[bone->parent], final_transforms[bone_index]);
 
             }
@@ -514,19 +514,17 @@ int main(void) {
     f32 seconds_per_frame = (f32)miliseconds_per_frame / 1000.0f;
     u64 last_time = os_get_ticks();
     
+    animator.play((char *)"mixamorig1_Hips", (char *)"idle", 1, true);
 
     while(!window->should_close) {
 
         os_window_poll_events(window);
 
         if(os_keyboard[(u32)'1']) {
-            animator.play((char *)"silly dance", 1, false);
+            animator.play((char *)"mixamorig1_Hips", (char *)"walking", 1, true);
         }
         if(os_keyboard[(u32)'2']) {
-            animator.play((char *)"falir", .1f, false);
-        }
-        if(os_keyboard[(u32)'3']) {
-            animator.play((char *)"dancing twerk", 1, false);
+            animator.play((char *)"mixamorig1_Spine", (char *)"punch", .5f, false);
         }
 
         animator.update(seconds_per_frame);
@@ -556,11 +554,11 @@ int main(void) {
 #if 0
         M4 m = m4_mul(m4_translate(v3(0, -1, -2)), m4_mul(m4_mul(m4_rotate_y(to_rad(angle)) ,m4_rotate_x(to_rad(-90))), m4_scale(.2)));
 #else
-        M4 m = m4_mul(m4_translate(v3(0, -1, -2)), m4_mul(m4_rotate_y(to_rad(angle)), m4_scale(.012f)));
+        M4 m = m4_mul(m4_translate(v3(0, 0, -2)), m4_mul(m4_rotate_y(to_rad(angle)), m4_scale(.012f)));
 #endif
         glUniformMatrix4fv(glGetUniformLocation(program, "model"), 1, true, m.m);
 
-        angle += (20 * seconds_per_frame);
+        angle += (14 * seconds_per_frame);
         if(angle >= 360) {
             angle = 0;
         }
