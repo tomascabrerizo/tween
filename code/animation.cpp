@@ -15,7 +15,7 @@ void AnimationState::sample_prev_and_next_animation_pose(AnimationSample *prev, 
     for(u32 sample_index = 0; sample_index < animation->num_samples; ++sample_index) {
         AnimationSample *sample = animation->samples + sample_index;
         if(sample->time_stamp > time) {
-            next_sample_index = sample->time_stamp;
+            next_sample_index = sample_index;
             break;
         }
     }
@@ -83,7 +83,7 @@ void AnimationSet::terminate(void) {
     free(final_transform_matrices);
 }
 
-void AnimationSet::play(char *name, f32 weight, bool loop) {
+void AnimationSet::play(const char *name, f32 weight, bool loop) {
     AnimationState *animation = find_animation_by_name(name);
     ASSERT(animation != nullptr);
     animation->time = 0;
@@ -92,7 +92,7 @@ void AnimationSet::play(char *name, f32 weight, bool loop) {
     animation->loop = loop;
 }
 
-void AnimationSet::stop(char *name) {
+void AnimationSet::stop(const char *name) {
     AnimationState *animation = find_animation_by_name(name);
     ASSERT(animation != nullptr);
     animation->enable = false;
@@ -121,6 +121,7 @@ void AnimationSet::update(f32 dt) {
     }
 
     // NOTE: Calculate final transform matrices
+    calculate_final_transform_matrices();
 
 }
 
@@ -189,5 +190,6 @@ void AnimationSet::zero_final_local_pose_and_weight(void) {
         final_local_pose[joint_index].rotation = q4(0, 0, 0, 0);
         final_local_pose[joint_index].scale = v3(0, 0, 0);
     }
+    
     final_total_weight = 0;
 }

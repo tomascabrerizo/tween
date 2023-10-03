@@ -106,12 +106,13 @@ struct AnimationSet {
     Skeleton *skeleton;
     AnimationState *states;
     u32 num_states;
+    M4 *final_transform_matrices;
 
     void initialize(AnimationClip *animations, u32 num_animations);
     void terminate(void);
 
-    void play(char *name, f32 weight, bool loop);
-    void stop(char *name);
+    void play(const char *name, f32 weight, bool loop);
+    void stop(const char *name);
 
     void update(f32 dt);
 
@@ -126,7 +127,6 @@ private:
     JointPose *final_local_pose;
     f32 final_total_weight;
 
-    M4 *final_transform_matrices;
 };
 
 

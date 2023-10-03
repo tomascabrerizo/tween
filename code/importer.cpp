@@ -316,9 +316,8 @@ int main(void) {
     Skeleton skeleton;
     AnimationClip *animations = nullptr;
     u32 num_animations = 0;
-
     read_tween_skeleton_file(&skeleton, &animations, &num_animations, animation_file);
-       
+
     u32 window_w = 1280;
     u32 window_h = 720;
     OsWindow *window = os_window_create((char *)"Importer Test", 10, 10, window_w, window_h);
@@ -354,10 +353,27 @@ int main(void) {
     u64 miliseconds_per_frame = 16;
     f32 seconds_per_frame = (f32)miliseconds_per_frame / 1000.0f;
     u64 last_time = os_get_ticks();
+
+    AnimationSet animator;
+    animator.initialize(animations, num_animations);
+    
+    animator.play("idle", 1, true);
     
     while(!window->should_close) {
 
         os_window_poll_events(window);
+
+        if(os_keyboard[(u32)'1']) {
+            animator.stop("idle");
+            animator.play("walking", 1, true);
+        }
+        if(os_keyboard[(u32)'2']) {
+            animator.stop("walking");
+            animator.play("idle", 1, true);
+        }
+
+
+        animator.update(seconds_per_frame);
         
         window_w = window_width(window);
         window_h = window_height(window);
@@ -373,14 +389,12 @@ int main(void) {
         M4 p = m4_perspective2(to_rad(80), aspect, 0.1f, 1000.0f);
         glUniformMatrix4fv(glGetUniformLocation(program, "projection"), 1, true, p.m);
 
-#if 0
-        for(u32 i = 0;  i < skeleton.num_bones; ++i) {
+        for(u32 i = 0;  i < animator.skeleton->num_joints; ++i) {
             char bone_matrix_name[1024];
             sprintf(bone_matrix_name, "bone_matrix[%d]", i);
-            M4 bone_matrix = animator.final_transforms[i];
+            M4 bone_matrix = animator.final_transform_matrices[i];
             glUniformMatrix4fv(glGetUniformLocation(program, bone_matrix_name), 1, true, bone_matrix.m);
         }
-#endif
         static f32 angle = 0;
         M4 m = m4_mul(m4_translate(v3(0, -1, -2)), m4_mul(m4_rotate_y(to_rad(angle)), m4_scale(.012f)));
         glUniformMatrix4fv(glGetUniformLocation(program, "model"), 1, true, m.m);
@@ -418,6 +432,8 @@ int main(void) {
         //printf("ms: %f, fps: %f\n", (f32)delta_time, ((f32)1/delta_time) * 1000);
     }
     
+    animator.terminate();
+
     os_gl_destroy_context(window);
     os_window_destroy(window);
     
