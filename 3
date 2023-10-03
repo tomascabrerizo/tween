@@ -85,25 +85,29 @@ static void count_child_nodes(aiNode *node, unsigned int *num_bones) {
 }
 
 static void write_inv_bind_transform(aiScene *scene, aiNode *node, FILE *file) {
+    
+    bool inv_matrix_found = false;
     for (unsigned int i = 0; i < scene->mNumMeshes; ++i) {
         aiMesh *mesh = scene->mMeshes[i];
         for(unsigned int j = 0; j < mesh->mNumBones; ++j) {
             aiBone *bone = mesh->mBones[j];
             if(bone->mName == node->mName) {
                 write_matrix(bone->mOffsetMatrix, file);
-                return;
+                inv_matrix_found = true;
+                break;
             }
         }
     }
     
-    printf("[WARNING] inv bind transform for: %s not found\n", node->mName.C_Str());
+    if(inv_matrix_found == false) {
+        aiMatrix4x4 identity = {};
+        identity.a1 = 1;
+        identity.b2 = 1;
+        identity.c3 = 1;
+        identity.d4 = 1;
+        write_matrix(identity, file);
+    }
 
-    aiMatrix4x4 identity = {};
-    identity.a1 = 1;
-    identity.b2 = 1;
-    identity.c3 = 1;
-    identity.d4 = 1;
-    write_matrix(identity, file);
 }
 
 static void write_skeleton_node(aiScene *scene, aiNode *node, FILE *file, unsigned int parent_offset, unsigned int *current_offset) {
@@ -214,7 +218,7 @@ static aiNode *find_root_node(const aiScene *scene) {
     return node;
 }
 
-static void write_skeleton(const aiScene *scene, FILE *file, const char *skeleton_name, unsigned int num_animations) {
+void write_skeleton(const aiScene *scene, FILE *file, const char *skeleton_name, unsigned int num_animations) {
     unsigned int flags = 0;
     if(scene->HasAnimations()) {
         flags |= TWEEN_ANIMATIONS;

@@ -12,7 +12,7 @@ g++ -std=c++11 -pedantic -D_GNU_SOURCE -Wall -Wextra -Werror -O0 -g -I./thirdpar
 
 g++ -std=c++11 -pedantic -D_GNU_SOURCE -Wall -Wextra -Werror -O0 -g -I./thirdparty -I./code \
     ./thirdparty/stb_image.c \
-    ./code/importer.cpp ./code/animator.cpp ./code/gpu.c ./code/os.c \
+    ./code/importer.cpp ./code/animation.cpp ./code/gpu.c ./code/os.c \
     -o ./build/import -lm -lX11 -lGL -lassimp -lXcursor\
     -Wno-implicit-fallthrough \
     -Wno-pedantic -Wno-write-strings 

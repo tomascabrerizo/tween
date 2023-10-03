@@ -3,16 +3,40 @@
 
 #include "gpu.h"
 
-struct PlayingAnimation {
-    
+struct Transition {
+    bool active;
+
+    f32 duration;
+    Animation *animation_src;
+    Animation *animation_dst;
+
     f32 time;
-    f32 weight;
-    bool loop;
-    s32 parent;
+    f32 animation_src_time;
+    f32 animation_dst_time;
+
+    void initialize(bool active, f32 duration, Animation *dst, f32 dst_animation_time, Animation *src, f32 src_animation_time);
+    void terminate(void);
+    
+    void update(f32 dt);
+    void calculate_keyframes(KeyFrame *keyframe);
+}; 
+
+struct BaseAnimation {
+    
+    Transition transition;
+    bool transition_was_active;
 
     Animation *animation;
+    f32 time;
 
-    void initialize(Animation *animation, f32 weight, s32 parent, bool loop);
+    void initialize(Animation *animation);
+    
+    void update(f32 dt);
+    void calculate_keyframes(KeyFrame *keyframe, f32 time);
+};
+
+struct MixAnimation {
+
 };
 
 #define MAX_ANIMATION_QUEUE 256
@@ -20,20 +44,19 @@ struct Animator {
     
     Model model;
     Skeleton skeleton;
-
-    PlayingAnimation animation_queue[MAX_ANIMATION_QUEUE];
-    u32 animation_queue_size;
-   
-    KeyFrame current_keyframe;
-    KeyFrame final_keyframe;
-    M4 *final_transforms;
     
+    f32 time;
+    BaseAnimation base_animation;
+
+    KeyFrame calculated_animation_frame;
+    M4 *final_transforms;
+
     void initialize(Model model, Skeleton skeleton);
     void terminate(void);
 
-    void play(char *parent_bone_name, char *animation_name, f32 weight, bool loop);
     void update(f32 dt);
 
+    void play(const char *name);
 };
 
 #endif // _ANIMATOR_H_

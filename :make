@@ -196,7 +196,7 @@ static void read_tween_model_file(Model *model, u8 *file) {
                 
                 u32 current_bone_id = READ_U32(file);
                 u32 num_weights = READ_U32(file);
-                printf("%d) num_weights: %d\n", current_bone_id, num_weights);
+                //printf("current_bone id: %d, num_weights: %d\n", current_bone_id, num_weights);
 
                 for(u32 weights_index = 0; weights_index < num_weights; ++weights_index) {
                     
@@ -231,19 +231,15 @@ static void read_sample(u8 **file, AnimationSample *sample, u32 num_joints) {
     u32 num_animated_bones = READ_U32(*file);
     sample->local_poses = (JointPose *)malloc(sizeof(JointPose)*num_joints);
     
-    bool time_stamp_initialize = false;
-
     for(u32 animated_bone_index = 0; animated_bone_index < num_animated_bones; ++animated_bone_index) {
+    
         u32 bone_index = READ_U32(*file);
-        f32 time_stamp = READ_F32(*file);
+        sample->time_stamp = READ_F32(*file);
         read_v3(file, &sample->local_poses[bone_index].position);
         read_q4(file, &sample->local_poses[bone_index].rotation);
         read_v3(file, &sample->local_poses[bone_index].scale);
         
-        if(time_stamp_initialize == false) {
-            sample->time_stamp = time_stamp;
-            time_stamp_initialize = true;
-        }
+        printf("joint id: %d, time_stamp: %f\n", bone_index, sample->time_stamp);
     }
 
 }
