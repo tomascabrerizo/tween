@@ -278,6 +278,8 @@ static void read_tween_skeleton_file(Skeleton *skeleton, AnimationClip **animati
 
     for(u32 animation_index = 0; animation_index < animations_array_size; ++animation_index) {
         AnimationClip *animation = animations_array + animation_index; 
+        animation->skeleton = skeleton;
+
         read_string(&file, animation->name);
         animation->duration = READ_F32(file);
         animation->num_samples = READ_U32(file);
@@ -379,13 +381,8 @@ int main(void) {
             glUniformMatrix4fv(glGetUniformLocation(program, bone_matrix_name), 1, true, bone_matrix.m);
         }
 #endif
-
         static f32 angle = 0;
-#if 0
-        M4 m = m4_mul(m4_translate(v3(0, -1, -2)), m4_mul(m4_mul(m4_rotate_y(to_rad(angle)) ,m4_rotate_x(to_rad(-90))), m4_scale(.2)));
-#else
         M4 m = m4_mul(m4_translate(v3(0, -1, -2)), m4_mul(m4_rotate_y(to_rad(angle)), m4_scale(.012f)));
-#endif
         glUniformMatrix4fv(glGetUniformLocation(program, "model"), 1, true, m.m);
 
         angle += (14 * seconds_per_frame);

@@ -84,18 +84,49 @@ struct AnimationClip {
 };
 
 struct AnimationState {
+    AnimationClip *animation;
+
     f32 time;
     f32 weight;
     
     bool enable;
     bool loop;
-    
-    AnimationClip *animation;   
+
+    void sample_animation_pose(JointPose *pose);
+
+private:
+
+    void sample_prev_and_next_animation_pose(AnimationSample *prev, AnimationSample *next, f32 time);
+    void mix_samples(JointPose *dst, JointPose *a, JointPose *b, f32 t);
+
 };
 
 struct AnimationSet {
+    
+    Skeleton *skeleton;
     AnimationState *states;
     u32 num_states;
+
+    void initialize(AnimationClip *animations, u32 num_animations);
+    void terminate(void);
+
+    void play(char *name, f32 weight, bool loop);
+    void stop(char *name);
+
+    void update(f32 dt);
+
+private:
+    
+    void update_animation_state(AnimationState *state, f32 dt);
+    AnimationState *find_animation_by_name(const char *name);
+    void zero_final_local_pose_and_weight(void);
+    void calculate_final_transform_matrices(void);
+
+    JointPose *intermidiate_local_pose;
+    JointPose *final_local_pose;
+    f32 final_total_weight;
+
+    M4 *final_transform_matrices;
 };
 
 

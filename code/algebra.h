@@ -311,6 +311,24 @@ static inline Q4 q4_slerp(Q4 a, Q4 b, f32 t) {
     return result;
 }
 
+static inline Q4 q4_add(Q4 a, Q4 b) {
+    Q4 result;
+    result.w = a.w + b.w;
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    result.z = a.z + b.z;
+    return result;
+}
+
+static inline Q4 q4_scale(Q4 a, f32 s) {
+    Q4 result;
+    result.w = a.w * s;
+    result.x = a.x * s;
+    result.y = a.y * s;
+    result.z = a.z * s;
+    return result;
+}
+
 static inline Q4 q4_normalize(Q4 q) {
     Q4 result = q;
 
