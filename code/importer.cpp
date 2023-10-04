@@ -367,20 +367,27 @@ int main(void) {
 
     set.play("idle", 1, true);
     set.play("walking", 1, true);
-    set.play("punch", 1, true);
+
+    f32 player_speed = 0;
     
     while(!window->should_close) {
 
         os_window_poll_events(window);
-#if 1
-        static f32 x = 0;
         
-        f32 weight = CLAMP((((sinf(to_rad(x)) + 1) / 2.0f) * 4), 0, 1);
-        set.update_weight("punch", weight);
+        if(os_keyboard[(u32)'w']) {
+            player_speed = CLAMP(player_speed + seconds_per_frame, 0, 1);
+        } else {
+            player_speed = CLAMP(player_speed - seconds_per_frame, 0, 1);
+        }
 
-        x += 16 * seconds_per_frame;
-        if(x >= 360) x = 0;
-#endif
+        if(os_keyboard[(u32)'1']) {
+            if(set.animation_finish("punch") == true) {
+                printf("punch!\n");
+                set.play_smooth("punch", 0.5);
+            }
+        }
+        
+        set.update_weight("walking", player_speed);
 
         set.update(seconds_per_frame);
         

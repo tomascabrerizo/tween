@@ -218,6 +218,8 @@ void os_window_poll_events(struct OsWindow *window) {
                 os_keyboard['2'] = true;
             } else if(sym == XK_3) {
                 os_keyboard['3'] = true;
+            } else if(sym == XK_w) {
+                os_keyboard['w'] = true;
             }
 
         } break;
@@ -236,7 +238,10 @@ void os_window_poll_events(struct OsWindow *window) {
                 os_keyboard['2'] = false;
             } else if(sym == XK_3) {
                 os_keyboard['3'] = false;
+            } else if(sym == XK_w) {
+                os_keyboard['w'] = false;
             }
+
 
         } break;
 

@@ -2,6 +2,7 @@
 #include "algebra.h"
 #include "common.h"
 
+#include <cmath>
 #include <cstdlib>
 #include <string.h>
 
@@ -21,7 +22,6 @@ s32 Skeleton::get_joint_index(const char *name) {
 }
 
 bool Skeleton::joint_is_in_hierarchy(s32 index, s32 parent_index) {
-
     if(index == parent_index) return true;
 
     Joint *joint = joints + index;
@@ -118,12 +118,25 @@ void AnimationSet::play(const char *name, f32 weight, bool loop) {
     animation->weight = weight;
     animation->enable = true;
     animation->loop = loop;
+    animation->smooth = false;
+    animation->transition_time = 0;
 }
 
 void AnimationSet::stop(const char *name) {
     AnimationState *animation = find_animation_by_name(name);
     ASSERT(animation != nullptr);
     animation->enable = false;
+}
+
+void AnimationSet::play_smooth(const char *name, f32 transition_time) {
+    AnimationState *animation = find_animation_by_name(name);
+    ASSERT(animation != nullptr);
+    animation->time = 0;
+    animation->weight = 1;
+    animation->enable = true;
+    animation->loop = false;
+    animation->smooth = true;
+    animation->transition_time = transition_time;    
 }
 
 void AnimationSet::update_weight(const char *name, f32 weight) {
@@ -136,6 +149,13 @@ void AnimationSet::set_root_joint(const char *name, const char *joint) {
     AnimationState *animation = find_animation_by_name(name);
     ASSERT(animation != nullptr);
     animation->root = skeleton->get_joint_index(joint);
+}
+
+bool AnimationSet::animation_finish(const char *name) {
+    AnimationState *animation = find_animation_by_name(name);
+    ASSERT(animation != nullptr);
+    return animation->enable == false;
+
 }
 
 void AnimationSet::update(f32 dt) {
@@ -187,7 +207,7 @@ void AnimationSet::update_animation_state(AnimationState *state, f32 dt) {
     // NOTE: update animation time
     state->time += dt;
     if(state->time >= animation->duration) {
-        if(state->loop) {
+        if(state->loop == true) {
             state->time = 0;
         } else {
             state->enable = false;
@@ -195,6 +215,23 @@ void AnimationSet::update_animation_state(AnimationState *state, f32 dt) {
         }
     }
     
+    // NOTE: update animatnion weight
+    if(state->smooth == true) {
+        f32 transition_time = state->transition_time;
+        if(state->time <= transition_time) {
+            state->weight = sinf((M_PI/2*state->time)/transition_time);
+        } else {
+            f32 remaining_time = state->animation->duration - state->time;
+            if(remaining_time <= transition_time) {
+                f32 time = transition_time - remaining_time;
+                state->weight = sinf((M_PI/2*(time+transition_time))/transition_time);
+            } else {
+                state->weight = 1;
+            }
+        }
+
+    }
+
     state->sample_animation_pose(intermidiate_local_pose);
 
     for(u32 joint_index = 0; joint_index < skeleton->num_joints; ++joint_index) { 

@@ -92,8 +92,11 @@ struct AnimationState {
     f32 time;
     f32 weight;
     
+    f32 transition_time;
+
     bool enable;
     bool loop;
+    bool smooth;
 
     s32 root;
 
@@ -117,8 +120,11 @@ struct AnimationSet {
     void terminate(void);
     
     void play(const char *name, f32 weight, bool loop);
+    void play_smooth(const char *name, f32 transition_time);
     void stop(const char *name);
     void update_weight(const char *name, f32 weight);
+
+    bool animation_finish(const char *name);
 
     void update(f32 dt);
     
