@@ -6,6 +6,33 @@
 #include <string.h>
 
 /* -------------------------------------------- */
+/*        Skeleton                              */
+/* -------------------------------------------- */
+
+s32 Skeleton::get_joint_index(const char *name) {
+    for(u32 joint_index = 0; joint_index < num_joints; ++joint_index) {
+        Joint *joint = joints + joint_index;
+        if(strcmp(joint->name, name) == 0) {
+            return joint_index;
+        }
+    }
+    ASSERT(!"Invalid code path");
+    return -1;
+}
+
+bool Skeleton::joint_is_in_hierarchy(s32 index, s32 parent_index) {
+
+    if(index == parent_index) return true;
+
+    Joint *joint = joints + index;
+    while(joint->parent > parent_index) {
+        joint = joints + joint->parent;
+    }
+    if(joint->parent == parent_index) return true;
+    return false;
+}
+
+/* -------------------------------------------- */
 /*        Animation State                       */
 /* -------------------------------------------- */
 
@@ -30,9 +57,9 @@ void AnimationState::sample_prev_and_next_animation_pose(AnimationSample *prev, 
 void AnimationState::mix_samples(JointPose *dst, JointPose *a, JointPose *b, f32 t) {
     Skeleton *skeleton = animation->skeleton;
     for(u32 joint_index = 0; joint_index < skeleton->num_joints; ++joint_index) {
-        dst[joint_index].position = v32_lerp(a[joint_index].position, b[joint_index].position, t);
+        dst[joint_index].position = v3_lerp(a[joint_index].position, b[joint_index].position, t);
         dst[joint_index].rotation = q4_slerp(a[joint_index].rotation, b[joint_index].rotation, t);
-        dst[joint_index].scale = v32_lerp(a[joint_index].scale, b[joint_index].scale, t);
+        dst[joint_index].scale = v3_lerp(a[joint_index].scale, b[joint_index].scale, t);
     }
 }
 
@@ -67,6 +94,7 @@ void AnimationSet::initialize(AnimationClip *animations, u32 num_animations) {
         animation_state->weight = 0;
         animation_state->enable = false;
         animation_state->loop = false;
+        animation_state->root = 0;
     
     }
 
@@ -98,29 +126,29 @@ void AnimationSet::stop(const char *name) {
     animation->enable = false;
 }
 
+void AnimationSet::update_weight(const char *name, f32 weight) {
+    AnimationState *animation = find_animation_by_name(name);
+    ASSERT(animation != nullptr);
+    animation->weight = weight;
+}
+
+void AnimationSet::set_root_joint(const char *name, const char *joint) {
+    AnimationState *animation = find_animation_by_name(name);
+    ASSERT(animation != nullptr);
+    animation->root = skeleton->get_joint_index(joint);
+}
+
 void AnimationSet::update(f32 dt) {
     
-    zero_final_local_pose_and_weight();
+    zero_final_local_pose();
     
-    // NOTE: update each animation state
     for(u32 state_index = 0; state_index < num_states; ++state_index) {
         AnimationState *state = states + state_index;
         if(state->enable) {
             update_animation_state(state, dt);
         }
     }
-    
-    // NOTE: Divide final local pose for total weight used
-    if(final_total_weight > 0) {
-        for(u32 joint_index = 0; joint_index < skeleton->num_joints; ++joint_index) { 
-            f32 inv_final_total_weight = 1.0f / final_total_weight;
-            final_local_pose[joint_index].position = v3_scale(final_local_pose[joint_index].position, inv_final_total_weight);
-            final_local_pose[joint_index].rotation = q4_scale(final_local_pose[joint_index].rotation, inv_final_total_weight);
-            final_local_pose[joint_index].scale = v3_scale(final_local_pose[joint_index].scale, inv_final_total_weight);
-        }
-    }
 
-    // NOTE: Calculate final transform matrices
     calculate_final_transform_matrices();
 
 }
@@ -137,10 +165,10 @@ void AnimationSet::calculate_final_transform_matrices(void) {
 
     for(u32 joint_index = 0; joint_index < skeleton->num_joints; ++joint_index) {
         Joint *joint = skeleton->joints + joint_index;
-        if(joint->parent == (u32)-1) {
+        if(joint->parent == -1) {
             final_transform_matrices[joint_index] = m4_mul(m4_identity(), final_transform_matrices[joint_index]);
         } else {
-            ASSERT(joint->parent < joint_index);
+            ASSERT(joint->parent < (s32)joint_index);
             final_transform_matrices[joint_index] = m4_mul(final_transform_matrices[joint->parent], final_transform_matrices[joint_index]);
 
         }
@@ -158,19 +186,27 @@ void AnimationSet::update_animation_state(AnimationState *state, f32 dt) {
     
     // NOTE: update animation time
     state->time += dt;
-    if((state->loop == true) && (state->time >= animation->duration)) {
-        state->time = 0;
+    if(state->time >= animation->duration) {
+        if(state->loop) {
+            state->time = 0;
+        } else {
+            state->enable = false;
+            return;
+        }
     }
     
     state->sample_animation_pose(intermidiate_local_pose);
-    
+
     for(u32 joint_index = 0; joint_index < skeleton->num_joints; ++joint_index) { 
-        final_local_pose[joint_index].position = v3_add(final_local_pose[joint_index].position, v3_scale(intermidiate_local_pose[joint_index].position, state->weight));
-        final_local_pose[joint_index].rotation = q4_add(final_local_pose[joint_index].rotation, q4_scale(intermidiate_local_pose[joint_index].rotation, state->weight));
-        final_local_pose[joint_index].scale = v3_add(final_local_pose[joint_index].scale, v3_scale(intermidiate_local_pose[joint_index].scale, state->weight));
+        if(skeleton->joint_is_in_hierarchy(joint_index, state->root)) {
+            JointPose *sample_local_pose = intermidiate_local_pose + joint_index;
+            JointPose *local_pose = final_local_pose + joint_index;
+            
+            local_pose->position = v3_lerp(local_pose->position, sample_local_pose->position, state->weight);
+            local_pose->rotation = q4_slerp(local_pose->rotation, sample_local_pose->rotation, state->weight);
+            local_pose->scale = v3_lerp(local_pose->scale, sample_local_pose->scale, state->weight);
+        }
     }
-    
-    final_total_weight += state->weight;
 }
 
 AnimationState *AnimationSet::find_animation_by_name(const char *name) {
@@ -183,13 +219,12 @@ AnimationState *AnimationSet::find_animation_by_name(const char *name) {
     return nullptr;
 }
 
-void AnimationSet::zero_final_local_pose_and_weight(void) {
+void AnimationSet::zero_final_local_pose(void) {
     
     for(u32 joint_index = 0; joint_index < skeleton->num_joints; ++joint_index) { 
-        final_local_pose[joint_index].position = v3(0, 0, 0);
-        final_local_pose[joint_index].rotation = q4(0, 0, 0, 0);
-        final_local_pose[joint_index].scale = v3(0, 0, 0);
+        JointPose *local_pose  = final_local_pose + joint_index;
+        local_pose->position = v3(0, 0, 0);
+        local_pose->rotation = q4(0, 0, 0, 0);
+        local_pose->scale = v3(0, 0, 0);
     }
-    
-    final_total_weight = 0;
 }

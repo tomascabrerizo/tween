@@ -31,7 +31,7 @@ static inline V3 v3(float x, float y,  float z) {
     return (V3){x, y, z};
 }
 
-static inline V3 v32_lerp(V3 a, V3 b, f32 t) {
+static inline V3 v3_lerp(V3 a, V3 b, f32 t) {
     V3 result;
     result.x = lerp(a.x, b.x, t);
     result.y = lerp(a.y, b.y, t);
@@ -311,24 +311,6 @@ static inline Q4 q4_slerp(Q4 a, Q4 b, f32 t) {
     return result;
 }
 
-static inline Q4 q4_add(Q4 a, Q4 b) {
-    Q4 result;
-    result.w = a.w + b.w;
-    result.x = a.x + b.x;
-    result.y = a.y + b.y;
-    result.z = a.z + b.z;
-    return result;
-}
-
-static inline Q4 q4_scale(Q4 a, f32 s) {
-    Q4 result;
-    result.w = a.w * s;
-    result.x = a.x * s;
-    result.y = a.y * s;
-    result.z = a.z * s;
-    return result;
-}
-
 static inline Q4 q4_normalize(Q4 q) {
     Q4 result = q;
 
@@ -338,6 +320,34 @@ static inline Q4 q4_normalize(Q4 q) {
     result.y *= inv_len; 
     result.z *= inv_len; 
 
+    return result;
+}
+
+
+static inline Q4 q4_add(Q4 a, Q4 b) {
+    Q4 result;
+    result.w = a.w + b.w;
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    result.z = a.z + b.z;
+    return result;
+}
+
+static inline Q4 q4_lerp(Q4 a, Q4 b, f32 t) {
+    Q4 result;
+    result.w = (1-t)*a.w + t*b.w;
+    result.x = (1-t)*a.x + t*b.x;
+    result.y = (1-t)*a.y + t*b.y;
+    result.z = (1-t)*a.z + t*b.z;
+    return result;
+}
+
+static inline Q4 q4_scale(Q4 a, f32 s) {
+    Q4 result;
+    result.w = a.w * s;
+    result.x = a.x * s;
+    result.y = a.y * s;
+    result.z = a.z * s;
     return result;
 }
 

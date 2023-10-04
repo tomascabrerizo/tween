@@ -20,7 +20,7 @@ typedef struct Vertex {
 
 struct Joint {
     char name[MAX_NAME_SIZE];
-    u32 parent;
+    s32 parent;
     M4 local_transform;
     M4 inv_bind_transform;
 };
@@ -29,6 +29,9 @@ struct Skeleton {
     char name[MAX_NAME_SIZE];
     Joint *joints;
     u32 num_joints;
+
+    s32 get_joint_index(const char *name);
+    bool joint_is_in_hierarchy(s32 index, s32 parent_index);
 };
 
 typedef struct Mesh {
@@ -92,6 +95,8 @@ struct AnimationState {
     bool enable;
     bool loop;
 
+    s32 root;
+
     void sample_animation_pose(JointPose *pose);
 
 private:
@@ -110,22 +115,26 @@ struct AnimationSet {
 
     void initialize(AnimationClip *animations, u32 num_animations);
     void terminate(void);
-
+    
     void play(const char *name, f32 weight, bool loop);
     void stop(const char *name);
+    void update_weight(const char *name, f32 weight);
 
     void update(f32 dt);
+    
+    void set_root_joint(const char *name, const char *joint);
 
 private:
     
     void update_animation_state(AnimationState *state, f32 dt);
-    AnimationState *find_animation_by_name(const char *name);
-    void zero_final_local_pose_and_weight(void);
+    void zero_final_local_pose(void);
     void calculate_final_transform_matrices(void);
+    
+    AnimationState *find_animation_by_name(const char *name);
 
+    // NOTE: This must be skeleton poses
     JointPose *intermidiate_local_pose;
     JointPose *final_local_pose;
-    f32 final_total_weight;
 
 };
 

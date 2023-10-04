@@ -230,6 +230,13 @@ static void read_sample(u8 **file, AnimationSample *sample, u32 num_joints) {
     
     u32 num_animated_bones = READ_U32(*file);
     sample->local_poses = (JointPose *)malloc(sizeof(JointPose)*num_joints);
+
+    for(u32 pose_index = 0; pose_index < num_joints; ++pose_index) {
+        JointPose *pose = sample->local_poses + pose_index;
+        pose->position = v3(0, 0, 1);
+        pose->rotation = q4(1, 0, 0, 0);
+        pose->scale = v3(1, 1, 1);
+    }
     
     bool time_stamp_initialize = false;
 
@@ -354,26 +361,28 @@ int main(void) {
     f32 seconds_per_frame = (f32)miliseconds_per_frame / 1000.0f;
     u64 last_time = os_get_ticks();
 
-    AnimationSet animator;
-    animator.initialize(animations, num_animations);
-    
-    animator.play("idle", 1, true);
+    AnimationSet set;
+    set.initialize(animations, num_animations);
+    set.set_root_joint("punch", "mixamorig1_Spine");
+
+    set.play("idle", 1, true);
+    set.play("walking", 1, true);
+    set.play("punch", 1, true);
     
     while(!window->should_close) {
 
         os_window_poll_events(window);
+#if 1
+        static f32 x = 0;
+        
+        f32 weight = CLAMP((((sinf(to_rad(x)) + 1) / 2.0f) * 4), 0, 1);
+        set.update_weight("punch", weight);
 
-        if(os_keyboard[(u32)'1']) {
-            animator.stop("idle");
-            animator.play("walking", 1, true);
-        }
-        if(os_keyboard[(u32)'2']) {
-            animator.stop("walking");
-            animator.play("idle", 1, true);
-        }
+        x += 16 * seconds_per_frame;
+        if(x >= 360) x = 0;
+#endif
 
-
-        animator.update(seconds_per_frame);
+        set.update(seconds_per_frame);
         
         window_w = window_width(window);
         window_h = window_height(window);
@@ -389,10 +398,10 @@ int main(void) {
         M4 p = m4_perspective2(to_rad(80), aspect, 0.1f, 1000.0f);
         glUniformMatrix4fv(glGetUniformLocation(program, "projection"), 1, true, p.m);
 
-        for(u32 i = 0;  i < animator.skeleton->num_joints; ++i) {
+        for(u32 i = 0;  i < set.skeleton->num_joints; ++i) {
             char bone_matrix_name[1024];
             sprintf(bone_matrix_name, "bone_matrix[%d]", i);
-            M4 bone_matrix = animator.final_transform_matrices[i];
+            M4 bone_matrix = set.final_transform_matrices[i];
             glUniformMatrix4fv(glGetUniformLocation(program, bone_matrix_name), 1, true, bone_matrix.m);
         }
         static f32 angle = 0;
@@ -432,7 +441,7 @@ int main(void) {
         //printf("ms: %f, fps: %f\n", (f32)delta_time, ((f32)1/delta_time) * 1000);
     }
     
-    animator.terminate();
+    set.terminate();
 
     os_gl_destroy_context(window);
     os_window_destroy(window);
