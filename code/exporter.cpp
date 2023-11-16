@@ -166,8 +166,11 @@ static bool find_bone_id_internal(aiNode *node, aiString name, unsigned int *id)
 
 static int find_bone_id(aiNode *node, aiString name) {
     unsigned id = 0;
-    assert(find_bone_id_internal(node, name, &id) == true);
-    return id;
+    if(find_bone_id_internal(node, name, &id) == true) {
+        return id;
+    } else {
+        return -1;
+    }
 }
 
 static aiNode *find_bone(aiNode *node, aiString name) {
@@ -236,6 +239,17 @@ static void write_skeleton(const aiScene *scene, FILE *file, const char *skeleto
     fwrite(&num_animations, sizeof(unsigned int), 1, file);
 }
 
+static unsigned int calculate_alctual_number_of_channels(aiNode *root_node, aiAnimation *animation) {
+    unsigned int num_of_channels_counter = 0; 
+    for(unsigned int bone_index = 0; bone_index < animation->mNumChannels; ++bone_index) {
+        aiNodeAnim *node = animation->mChannels[bone_index];
+        int id = find_bone_id(root_node, node->mNodeName);
+        if(id == -1) continue;
+        ++num_of_channels_counter;
+    }
+    return num_of_channels_counter;
+}
+
 void write_animation(const aiScene *scene, FILE *file, const char *animation_name) {
 
     assert(scene->mNumAnimations > 0);
@@ -256,12 +270,15 @@ void write_animation(const aiScene *scene, FILE *file, const char *animation_nam
 
     for(unsigned int keyframe_index = 0; keyframe_index < num_keyframes; ++keyframe_index) {
         
-        fwrite(&animation->mNumChannels, sizeof(unsigned int), 1, file);
+        unsigned int animation_num_channels = calculate_alctual_number_of_channels(root_node, animation);
+
+        fwrite(&animation_num_channels, sizeof(unsigned int), 1, file);
 
         for(unsigned int bone_index = 0; bone_index < animation->mNumChannels; ++bone_index) {
 
             aiNodeAnim *node = animation->mChannels[bone_index];
-            unsigned int id = find_bone_id(root_node, node->mNodeName);
+            int id = find_bone_id(root_node, node->mNodeName);
+            if(id == -1) continue;
             write_key_frame(id, node->mPositionKeys[keyframe_index], node->mRotationKeys[keyframe_index], node->mScalingKeys[keyframe_index], file);
         }
     }
@@ -352,7 +369,9 @@ void write_model(const aiScene *scene, FILE *file) {
             for(unsigned int j = 0; j < mesh->mNumBones; ++j) {
                 
                 aiBone *bone = mesh->mBones[j];
-                unsigned int id = find_bone_id(root_node, bone->mName);
+                int id = find_bone_id(root_node, bone->mName);
+                if(id == -1) continue;
+
                 fwrite(&id, sizeof(unsigned int), 1, file);
                 fwrite(&bone->mNumWeights, sizeof(unsigned int), 1, file);
 
@@ -378,7 +397,7 @@ void write_model(const aiScene *scene, FILE *file) {
 int main(void) {
 
     Assimp::Importer importer0;
-    const aiScene *model = importer0.ReadFile("./data/Silly Dancing.dae", 
+    const aiScene *model = importer0.ReadFile("./data/hero_idle.dae", 
             aiProcess_Triangulate           |
             aiProcess_JoinIdenticalVertices |
             aiProcess_SortByPType); 
@@ -388,7 +407,7 @@ int main(void) {
     }
     
     Assimp::Importer importer1;
-    const aiScene *skeleton = importer1.ReadFile("./data/Silly Dancing.dae", 
+    const aiScene *skeleton = importer1.ReadFile("./data/hero_idle.dae", 
             aiProcess_Triangulate           |
             aiProcess_JoinIdenticalVertices |
             aiProcess_SortByPType); 
@@ -398,7 +417,7 @@ int main(void) {
     }
 
     Assimp::Importer importer2;
-    const aiScene *idle = importer2.ReadFile("./data/Neutral Idle.dae", 
+    const aiScene *idle = importer2.ReadFile("./data/hero_idle.dae", 
             aiProcess_Triangulate           |
             aiProcess_JoinIdenticalVertices |
             aiProcess_SortByPType); 
@@ -408,7 +427,7 @@ int main(void) {
     }
 
     Assimp::Importer importer3;
-    const aiScene *walking = importer3.ReadFile("./data/Walking.dae", 
+    const aiScene *walking = importer3.ReadFile("./data/hero_walk.dae", 
             aiProcess_Triangulate           |
             aiProcess_JoinIdenticalVertices |
             aiProcess_SortByPType); 
@@ -417,17 +436,6 @@ int main(void) {
         return 1;
     }
 
-    Assimp::Importer importer4;
-    const aiScene *punch = importer4.ReadFile("./data/Combo Punch.dae", 
-            aiProcess_Triangulate           |
-            aiProcess_JoinIdenticalVertices |
-            aiProcess_SortByPType); 
-    if(punch == nullptr) {
-        printf("Assimp error: %s\n", importer4.GetErrorString());
-        return 1;
-    }
-
-    
     unsigned int magic = TWEEN_MAGIC;
 
     FILE *animation_file = fopen("./data/model.twa", "wb");
@@ -440,12 +448,11 @@ int main(void) {
     fwrite(&magic, sizeof(unsigned int), 1, animation_file);
     
     // NOTE: Write skeleton:
-    write_skeleton(skeleton, animation_file, "constructor", 3);
+    write_skeleton(skeleton, animation_file, "hero", 2);
     
     // NOTE: Write animation file
     write_animation(idle,   animation_file, "idle");
     write_animation(walking,   animation_file, "walking");
-    write_animation(punch, animation_file, "punch");
     
     printf("Skeleton and all animation written perfectly\n");
 
