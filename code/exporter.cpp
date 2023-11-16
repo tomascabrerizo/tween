@@ -394,17 +394,184 @@ void write_model(const aiScene *scene, FILE *file) {
 
 }
 
-int main(void) {
+/* -------------------------------------------------------------------------- */
+/*                            CLI implementation                              */
+/* -------------------------------------------------------------------------- */
 
-    Assimp::Importer importer0;
-    const aiScene *model = importer0.ReadFile("./data/hero_idle.dae", 
-            aiProcess_Triangulate           |
-            aiProcess_JoinIdenticalVertices |
-            aiProcess_SortByPType); 
-    if(model == nullptr) {
-        printf("Assimp error: %s\n", importer0.GetErrorString());
-        return 1;
+char *ext_model = ".twm";
+char *ext_anim  = ".twa";
+
+char *command_model = "model";
+char *command_anim  = "anim";
+char *command_add   = "add";
+
+void output_usage_message_and_exit(void) {
+    printf("[USAGE]:\n");
+    printf("    - model: exporter model (ouput_name) (path)\n");
+    printf("    - anim:  exporter anim (ouput_name) add (path) add (path) ... \n");
+    exit(0);
+}
+
+void add_ext(char *buffer, unsigned int buffer_size, char *name, char *ext) {
+    unsigned int name_size = strlen(name);
+    unsigned int ext_size = strlen(ext);
+    ASSERT(name_size <= buffer_size - ext_size);
+    memcpy(buffer, name, name_size);
+    memcpy(buffer + name_size, ext, ext_size);
+    buffer[name_size + ext_size] = '\0';
+}
+
+void remove_ext(char *buffer, unsigned int buffer_size, char *name) {
+    unsigned int name_size = strlen(name);
+    ASSERT(name_size <= buffer_size);
+    
+    int ext_index = name_size - 1;
+    while(ext_index >= 0) {
+        if(name[ext_index] == '.') {
+            break;    
+        }
+        --ext_index;
     }
+    ASSERT(ext_index >= 0);
+    
+    bool slash_found = false;
+    int slash_index = name_size - 1;
+    while(slash_index >= 0) {
+        if(name[slash_index] == '/' || name[slash_index] == '\\') {
+            slash_found = true;
+            break;
+        }
+        --slash_index;
+    }
+    
+    int start_index = 0;
+
+    if(slash_found) {
+        start_index = slash_index + 1; 
+    }
+    ASSERT(start_index < ext_index);
+
+    memcpy(buffer, name + start_index, ext_index - start_index);
+    buffer[ext_index - start_index] = '\0';
+}
+
+int main(int argc, char **argv) {
+    
+    if(argc == 1) {
+        output_usage_message_and_exit();
+    }
+    
+    ASSERT(argc > 1);
+    unsigned int magic = TWEEN_MAGIC;
+    
+    char *command = argv[1];
+    if(strcmp(command, command_model) == 0) {
+        ASSERT(argc == 4);
+        char *model_name = argv[2];
+        char *model_path = argv[3];
+
+        Assimp::Importer importer;
+        const aiScene *model = importer.ReadFile(model_path, 
+                aiProcess_Triangulate           |
+                aiProcess_JoinIdenticalVertices |
+                aiProcess_SortByPType); 
+        if(model == nullptr) {
+            printf("Error: %s\n", importer.GetErrorString());
+            return 1;
+        }
+        
+        char output_name[256];
+        add_ext(output_name, 256, model_name, ext_model);
+
+        FILE *model_file = fopen(output_name, "wb");
+        if(model_file == nullptr) {
+            printf("Cannot open specified file\n");
+            return 1;
+        }
+        
+        printf("------------------------------------------------------------------\n");
+        printf("     Loading model from: %s\n", model_path);
+        printf("     Output: %s\n", output_name);
+        printf("------------------------------------------------------------------\n");
+
+        printf("Magic Number: %d\n", magic);
+        fwrite(&magic, sizeof(unsigned int), 1, model_file);
+        write_model(model, model_file);
+
+    } else if(strcmp(command, command_anim) == 0) {
+        ASSERT(argc >= 5);
+
+        char *anim_name = argv[2];
+        unsigned int anim_count = (argc - 3) / 2;
+
+        char output_name[256];
+        add_ext(output_name, 256, anim_name, ext_anim);
+
+        FILE *animation_file = fopen(output_name, "wb");
+        if(animation_file == nullptr) {
+            printf("Cannot open specified file\n");
+            return 1;
+        }
+        printf("------------------------------------------------------------------\n");
+        printf("     Loading Animations: %d\n", anim_count);
+        printf("     Output: %s\n", anim_name);
+        printf("------------------------------------------------------------------\n");
+
+        printf("Magic Number: %d\n", magic);
+        fwrite(&magic, sizeof(unsigned int), 1, animation_file);
+        
+        bool skeleton_written = false;
+        unsigned int current_cmd = 3;
+        while(current_cmd <= argc - 2) {
+            char *add = argv[current_cmd++];
+            ASSERT(strcmp(add, command_add) == 0);
+            char *path = argv[current_cmd++];
+            char name[256];
+            remove_ext(name, 256, path);
+
+            Assimp::Importer importer;
+            const aiScene *anim = importer.ReadFile(path, 
+                    aiProcess_Triangulate           |
+                    aiProcess_JoinIdenticalVertices |
+                    aiProcess_SortByPType); 
+            if(anim == nullptr) {
+                printf("Error: %s\n", importer.GetErrorString());
+                return 1;
+            }
+
+            if(!skeleton_written) {
+
+                printf("------------------------------------------------------------------\n");
+                printf("     Adding Skeleton from: %s\n", path);
+                printf("     Skeleton name: %s\n", anim_name);
+                printf("------------------------------------------------------------------\n");
+                
+                write_skeleton(anim, animation_file, anim_name, anim_count);
+                skeleton_written = true;
+            }
+
+            printf("------------------------------------------------------------------\n");
+            printf("     Adding animation from: %s\n", path);
+            printf("     Animation name: %s\n", name);
+            printf("------------------------------------------------------------------\n");
+
+            write_animation(anim, animation_file, name);
+        
+        }
+
+    } else {
+        output_usage_message_and_exit();
+    }
+    
+    return 0;
+
+
+    for(u32 arg_index = 0; arg_index < argc; ++arg_index) {
+        char *arg = argv[arg_index];
+        printf("%s\n", arg);
+    }
+
+
     
     Assimp::Importer importer1;
     const aiScene *skeleton = importer1.ReadFile("./data/hero_idle.dae", 
@@ -436,8 +603,6 @@ int main(void) {
         return 1;
     }
 
-    unsigned int magic = TWEEN_MAGIC;
-
     FILE *animation_file = fopen("./data/model.twa", "wb");
     if(animation_file == nullptr) {
         printf("Cannot open specified file\n");
@@ -459,18 +624,6 @@ int main(void) {
     fclose(animation_file);
 
     // NOTE: Write model file
-
-    FILE *model_file = fopen("./data/model.twm", "wb");
-    if(model_file == nullptr) {
-        printf("Cannot open specified file\n");
-        return 1;
-    }
-
-    printf("Magic Number: %d\n", magic);
-    fwrite(&magic, sizeof(unsigned int), 1, model_file);
-    write_model(model, model_file);
-    
-    fclose(model_file);
 
     return 0;
 }
